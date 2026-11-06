@@ -1,0 +1,28 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "coffee-grind-ph-dce9c",
+          "appId": "1:925115875254:android:1013f2ab4631bb5e570b17",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "coffee-grind-ph-dce9c",
+          "configurations": {
+            "android": "1:925115875254:android:1013f2ab4631bb5e570b17",
+            "ios": "1:925115875254:ios:af3a0c7c8878b799570b17",
+            "macos": "1:925115875254:ios:af3a0c7c8878b799570b17",
+            "web": "1:925115875254:web:b8e6ea183a538cce570b17",
+            "windows": "1:925115875254:web:7da5ac4508650780570b17"
+          }
+        }
+      }
+    }
+  }
+}

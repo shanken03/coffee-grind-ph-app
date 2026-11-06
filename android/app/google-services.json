@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "925115875254",
+    "firebase_url": "https://coffee-grind-ph-dce9c-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "coffee-grind-ph-dce9c",
+    "storage_bucket": "coffee-grind-ph-dce9c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:925115875254:android:1013f2ab4631bb5e570b17",
+        "android_client_info": {
+          "package_name": "com.example.coffee_grind_ph"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "925115875254-ie1dg35f04lddjcqmmc60k0537nvbffe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABKKIVFrOGkdefFq3jXLJHo72duj6A32I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "925115875254-ie1dg35f04lddjcqmmc60k0537nvbffe.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

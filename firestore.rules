@@ -1,0 +1,236 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // AUTHENTICATION & ROLE HELPERS
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Master Owner: Strictly verified via auth token email (Zero deadlock)
+    function isOwner() {
+      return isAuthenticated() &&
+        ('email' in request.auth.token) &&
+        (request.auth.token.email == 'iankakilala@gmail.com' ||
+         request.auth.token.email.lower() == 'iankakilala@gmail.com');
+    }
+
+    // Safe existence checks before any document lookup
+    function isPrimaryBranchAccount() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/branch_accounts/$(request.auth.uid));
+    }
+
+    function isLegacyBranchAccount() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/branchAccounts/$(request.auth.uid));
+    }
+
+    function hasBranchAccountDoc() {
+      return isPrimaryBranchAccount() || isLegacyBranchAccount();
+    }
+
+    // Safely retrieve terminal account data only when confirmed to exist
+    function getBranchAccountDoc() {
+      return isPrimaryBranchAccount()
+        ? get(/databases/$(database)/documents/branch_accounts/$(request.auth.uid)).data
+        : get(/databases/$(database)/documents/branchAccounts/$(request.auth.uid)).data;
+    }
+
+    // Extract non-empty assigned branch; prevents empty primary field from masking fallback
+    function extractBranchId(doc) {
+      return ('branchId' in doc && doc.branchId is string && doc.branchId.size() > 0)
+        ? doc.branchId
+        : (('branch_id' in doc && doc.branch_id is string && doc.branch_id.size() > 0)
+           ? doc.branch_id
+           : '');
+    }
+
+    function getAssignedBranch() {
+      return hasBranchAccountDoc() ? extractBranchId(getBranchAccountDoc()) : '';
+    }
+
+    // Validate account document structure: explicit role, explicit status, non-empty branch
+    function isDocValidBranchAccount(doc) {
+      let hasRole = ('role' in doc && doc.role in ['branch', 'staff']) ||
+                    ('accountType' in doc && doc.accountType == 'branch');
+      let isActive = ('status' in doc && doc.status in ['active', 'open']) ||
+                     ('active' in doc && doc.active == true);
+      let branchId = extractBranchId(doc);
+      return hasRole && isActive && branchId != '';
+    }
+
+    function isValidBranchAccount() {
+      return hasBranchAccountDoc() && isDocValidBranchAccount(getBranchAccountDoc());
+    }
+
+    // Verify whether document data matches caller's assigned branch
+    function isDocumentForAssignedBranch(data) {
+      let assigned = getAssignedBranch();
+      return assigned != '' && (
+        (('branch_id' in data) && data.branch_id == assigned) ||
+        (('branchId' in data) && data.branchId == assigned)
+      );
+    }
+
+    // Verify whether announcement is intended for caller's branch or all branches
+    function isAnnouncementForBranch(data) {
+      let assigned = getAssignedBranch();
+      let branchDoc = getBranchAccountDoc();
+      let bName = ('branchName' in branchDoc && branchDoc.branchName is string) ? branchDoc.branchName : '';
+
+      let isForAll = ('targetAudience' in data && data.targetAudience in ['All Branches', 'all', 'ALL']) ||
+                     ('isAllBranches' in data && data.isAllBranches == true) ||
+                     (('branchId' in data) && data.branchId in ['all', 'ALL']);
+
+      let isForThisBranch = isDocumentForAssignedBranch(data) ||
+                            (('targetBranchId' in data) && data.targetBranchId == assigned) ||
+                            (('targetBranchName' in data) && bName != '' && data.targetBranchName == bName) ||
+                            (('targetAudience' in data) && bName != '' && data.targetAudience == bName);
+
+      let isNotDraft = !('status' in data) || data.status != 'draft';
+
+      return (isForAll || isForThisBranch) && isNotDraft;
+    }
+
+    // ===============================================================
+    // 1. OWNER MASTER ACCESS (All 17 Web Admin Collections)
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if isOwner();
+    }
+
+    // ===============================================================
+    // 2. PRODUCT CATALOG & RECIPES (Read-Only for Active Terminals)
+    // ===============================================================
+    match /products/{productId} {
+      allow read: if isValidBranchAccount();
+      allow write: if isOwner();
+    }
+
+    match /recipes/{recipeId} {
+      allow read: if isValidBranchAccount();
+      allow write: if isOwner();
+    }
+
+    // Master ingredients catalog: Read-only for branch restock requests
+    match /ingredients/{ingredientId} {
+      allow read: if isValidBranchAccount();
+      allow write: if isOwner();
+    }
+
+    match /branch_product_stock/{stockId} {
+      allow read: if isValidBranchAccount() && isDocumentForAssignedBranch(resource.data);
+      allow write: if isOwner();
+    }
+
+    // ===============================================================
+    // 3. STORE BRANCHES & ACCOUNT MAPPINGS
+    // ===============================================================
+    match /branches/{branchId} {
+      allow read: if isValidBranchAccount() && (
+        branchId == getAssignedBranch() ||
+        isDocumentForAssignedBranch(resource.data)
+      );
+      allow write: if isOwner();
+    }
+
+    // Terminal can ONLY read its own account profile; cannot view other branches
+    match /branch_accounts/{uid} {
+      allow read: if isAuthenticated() && request.auth.uid == uid;
+      allow write: if isOwner();
+    }
+
+    match /branchAccounts/{uid} {
+      allow read: if isAuthenticated() && request.auth.uid == uid;
+      allow write: if isOwner();
+    }
+
+    // Web canonical branch account collection is Owner-Only
+    match /branch_account/{uid} {
+      allow read, write: if isOwner();
+    }
+
+    match /users/{uid} {
+      allow read: if isAuthenticated() && request.auth.uid == uid;
+      allow write: if isOwner();
+    }
+
+    // ===============================================================
+    // 4. INVENTORY (Strict Branch Isolation & Field Constraints)
+    // ===============================================================
+    match /inventory/{inventoryId} {
+      allow read: if isValidBranchAccount() && isDocumentForAssignedBranch(resource.data);
+
+      allow update: if isValidBranchAccount() &&
+        isDocumentForAssignedBranch(resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantity', 'updated_at', 'updatedAt', 'lastUpdated']) &&
+        request.resource.data.quantity is number &&
+        request.resource.data.quantity >= 0;
+
+      allow create, delete: if isOwner();
+    }
+
+    // Branch POS writes deduction audit logs during checkout; logs are immutable
+    match /inventory_transactions/{txId} {
+      allow create: if isValidBranchAccount() && isDocumentForAssignedBranch(request.resource.data);
+      allow read: if isValidBranchAccount() && isDocumentForAssignedBranch(resource.data);
+      allow update, delete: if isOwner();
+    }
+
+    // ===============================================================
+    // 5. TRANSACTIONS (Strict Branch Isolation)
+    // ===============================================================
+    match /sales/{saleId} {
+      allow create: if isValidBranchAccount() && isDocumentForAssignedBranch(request.resource.data);
+      allow read: if isValidBranchAccount() && (resource == null || isDocumentForAssignedBranch(resource.data));
+      allow update, delete: if isOwner();
+    }
+
+    match /wastage/{wastageId} {
+      allow create: if isValidBranchAccount() && isDocumentForAssignedBranch(request.resource.data);
+      allow read: if isValidBranchAccount() && isDocumentForAssignedBranch(resource.data);
+      allow update, delete: if isOwner();
+    }
+
+    // ===============================================================
+    // 6. ADMINISTRATIVE & OPERATIONS
+    // ===============================================================
+    match /announcements/{announcementId} {
+      allow read: if isValidBranchAccount() && isAnnouncementForBranch(resource.data);
+      allow write: if isOwner();
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isValidBranchAccount() && isDocumentForAssignedBranch(resource.data);
+      allow write: if isOwner();
+    }
+
+    // Branch staff can submit pending concerns for their branch; cannot resolve or delete
+    match /concerns/{concernId} {
+      allow create: if isValidBranchAccount() &&
+        isDocumentForAssignedBranch(request.resource.data) &&
+        request.resource.data.status == 'pending';
+      allow read: if isValidBranchAccount() && isDocumentForAssignedBranch(resource.data);
+      allow update, delete: if isOwner();
+    }
+
+    // Branch staff can create pending restock requests for their branch; cannot approve or delete
+    match /restock_requests/{requestId} {
+      allow create: if isValidBranchAccount() &&
+        isDocumentForAssignedBranch(request.resource.data) &&
+        request.resource.data.status == 'pending';
+      allow read: if isValidBranchAccount() && isDocumentForAssignedBranch(resource.data);
+      allow update, delete: if isOwner();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read, write: if isOwner();
+    }
+
+    match /quota_history/{docId} {
+      allow read, write: if isOwner();
+    }
+  }
+}
