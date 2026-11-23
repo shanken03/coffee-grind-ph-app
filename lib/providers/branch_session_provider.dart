@@ -7,7 +7,7 @@ import '../core/utils/auth_error_formatter.dart';
 import '../services/auth_service.dart';
 
 class BranchSessionProvider extends ChangeNotifier {
-  final AuthService _authService = AuthService();
+  final AuthService _authService;
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<DocumentSnapshot>? _quotaSubscription;
 
@@ -22,7 +22,8 @@ class BranchSessionProvider extends ChangeNotifier {
   bool _isLoadingQuota = false;
   bool _showLoginSuccessToast = false;
 
-  BranchSessionProvider() {
+  BranchSessionProvider({AuthService? authService})
+      : _authService = authService ?? AuthService() {
     _initAuthListener();
   }
 
@@ -50,6 +51,8 @@ class BranchSessionProvider extends ChangeNotifier {
     }
     return false;
   }
+
+  bool _isProcessingVerification = false;
 
   void _initAuthListener() {
     try {
@@ -91,6 +94,8 @@ class BranchSessionProvider extends ChangeNotifier {
   }
 
   Future<void> _verifyAndSetBranchInfo(User user) async {
+    if (_isProcessingVerification) return;
+    _isProcessingVerification = true;
     try {
       final info = await _authService.verifyAndGetBranchInfo(user);
       if (info != null && info.branchId.isNotEmpty) {
@@ -106,14 +111,16 @@ class BranchSessionProvider extends ChangeNotifier {
         _isInitializing = false;
         _isVerifying = false;
         _verificationError = 'This account has no valid branch assignment.';
-        await signOut();
+        await signOut(preserveError: true);
       }
     } catch (e) {
       _currentBranch = null;
       _isInitializing = false;
       _isVerifying = false;
       _verificationError = formatAuthError(e);
-      await signOut();
+      await signOut(preserveError: true);
+    } finally {
+      _isProcessingVerification = false;
     }
   }
 
@@ -182,15 +189,23 @@ class BranchSessionProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> signOut() async {
+  Future<void> signOut({bool preserveError = false}) async {
     await _authService.signOutBranch();
     _currentUser = null;
     _currentBranch = null;
     _isInitializing = false;
     _isVerifying = false;
+    if (!preserveError) {
+      _verificationError = null;
+    }
     _quotaSubscription?.cancel();
     _quotaSubscription = null;
     notifyListeners();
+  }
+
+  /// Request a password reset link for the given branch account email
+  Future<void> sendPasswordReset(String email) async {
+    await _authService.sendPasswordResetEmail(email);
   }
 
   @visibleForTesting

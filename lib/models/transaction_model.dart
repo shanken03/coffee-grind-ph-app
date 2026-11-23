@@ -34,6 +34,8 @@ class TransactionModel {
   final double? grossProfit;
   final double? otherExpenses;
   final double? netProfit;
+  final bool hasManualQuotaOverdraft;
+  final Map<String, int> manualQuotaOverdrafts;
 
   const TransactionModel({
     required this.transactionId,
@@ -48,6 +50,8 @@ class TransactionModel {
     this.grossProfit,
     this.otherExpenses,
     this.netProfit,
+    this.hasManualQuotaOverdraft = false,
+    this.manualQuotaOverdrafts = const {},
   });
 
   int get totalItemsCount => items.fold(0, (sum, item) => sum + item.quantity);

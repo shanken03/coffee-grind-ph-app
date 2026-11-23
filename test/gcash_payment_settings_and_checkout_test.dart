@@ -513,6 +513,57 @@ void main() {
       expect(submittedRef, isNull);
       expect(find.byType(GcashPaymentDialog), findsNothing);
     });
+
+    testWidgets('Validates GCash reference: rejects characters/strings and limits to max 13 digits', (tester) async {
+      String? submittedRef;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () async {
+                  submittedRef = await showGcashPaymentDialog(
+                    ctx,
+                    settings: validSettings,
+                    totalAmount: 150.0,
+                  );
+                },
+                child: const Text('Open QR Dialog'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open QR Dialog'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final textFieldFinder = find.byType(TextFormField);
+      expect(textFieldFinder, findsOneWidget);
+
+      // 1. Attempt typing non-digit characters / strings - input formatter filters them out
+      await tester.enterText(textFieldFinder, 'ABCD-EFGH!@#');
+      await tester.pump();
+      TextFormField fieldWidget = tester.widget(textFieldFinder);
+      expect(fieldWidget.controller!.text, isEmpty);
+
+      // 2. Attempt typing more than 13 digits (16 digits) - clamped to 13 digits
+      await tester.enterText(textFieldFinder, '1234567890123456');
+      await tester.pump();
+      fieldWidget = tester.widget(textFieldFinder);
+      expect(fieldWidget.controller!.text, '1234567890123');
+      expect(fieldWidget.controller!.text.length, 13);
+
+      // 3. Confirm payment with valid 13-digit reference
+      await tester.tap(find.text('Confirm Payment'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(submittedRef, '1234567890123');
+      expect(find.byType(GcashPaymentDialog), findsNothing);
+    });
   });
 
   group('5. CheckoutScreen Payment Method & GCash Integration Tests', () {

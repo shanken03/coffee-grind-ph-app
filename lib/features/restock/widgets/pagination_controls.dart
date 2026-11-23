@@ -75,7 +75,7 @@ class PaginationControls extends StatelessWidget {
           decoration: const BoxDecoration(
             color: AppColors.surfaceWhite,
             border: Border(
-              top: BorderSide(color: AppColors.latteBeige, width: 1),
+              top: BorderSide(color: AppColors.borderSubtle, width: 1),
             ),
           ),
           padding: EdgeInsets.symmetric(
@@ -246,12 +246,12 @@ class PaginationControls extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.forestGreen.withValues(alpha: 0.1),
+                color: AppColors.warmCream,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: AppColors.forestGreen.withValues(alpha: 0.3),
+                  color: AppColors.borderSubtle,
                   width: 1,
                 ),
               ),
@@ -259,7 +259,8 @@ class PaginationControls extends StatelessWidget {
                 'Page $currentPage of $totalPages',
                 style: AppTextStyles.badge(
                   fontSize: 12,
-                  color: AppColors.forestGreen,
+                  color: AppColors.darkCoffee,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -303,10 +304,10 @@ class PaginationControls extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: isActive ? AppColors.forestGreen : AppColors.surfaceWhite,
+              color: isActive ? AppColors.darkCoffee : AppColors.surfaceWhite,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isActive ? AppColors.forestGreen : AppColors.latteBeige,
+                color: isActive ? AppColors.darkCoffee : AppColors.borderSubtle,
                 width: 1,
               ),
             ),
@@ -331,7 +332,7 @@ class PaginationControls extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.latteBeige),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
@@ -374,7 +375,7 @@ class PaginationControls extends StatelessWidget {
     bool isCompact = false,
   }) {
     final textColor = isEnabled ? AppColors.darkCoffee : AppColors.textSecondary.withValues(alpha: 0.4);
-    final borderColor = isEnabled ? AppColors.latteBeige : AppColors.latteBeige.withValues(alpha: 0.4);
+    final borderColor = isEnabled ? AppColors.borderSubtle : AppColors.borderSubtle.withValues(alpha: 0.4);
 
     return InkWell(
       onTap: isEnabled ? onTap : null,

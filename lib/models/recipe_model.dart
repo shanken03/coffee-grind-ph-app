@@ -194,8 +194,16 @@ class RecipeModel {
   List<RecipeIngredientRequirement> getRequirementsForTemperature(
     String? temperature,
   ) {
+    String? effectiveTemp = temperature?.trim();
+    if (effectiveTemp == null || effectiveTemp.isEmpty) {
+      final hasHot = ingredients.any((ing) => ing.temperature == 'hot');
+      final hasIced = ingredients.any((ing) => ing.temperature == 'iced');
+      if (hasHot && hasIced) {
+        effectiveTemp = 'iced';
+      }
+    }
     return ingredients
-        .where((ing) => ing.matchesTemperature(temperature))
+        .where((ing) => ing.matchesTemperature(effectiveTemp))
         .toList();
   }
 

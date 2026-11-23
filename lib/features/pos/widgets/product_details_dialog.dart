@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_animations.dart';
 import '../../../models/product_model.dart';
 import '../../../providers/pos_cart_provider.dart';
 import '../../../providers/products_provider.dart';
@@ -163,10 +164,22 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
     }
   }
 
+  PosCartProvider? _findCartProvider(
+    BuildContext context, {
+    bool listen = false,
+  }) {
+    try {
+      return Provider.of<PosCartProvider>(context, listen: listen);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final productsProvider = _findProductsProvider(context, listen: true);
     final inventoryProvider = _findInventoryProvider(context, listen: true);
+    final cartProvider = _findCartProvider(context, listen: true);
     final freshProduct = productsProvider?.getProductById(
       widget.product.productId,
     );
@@ -175,16 +188,28 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
     final p = effectiveProduct.pricing;
     final showTemperature = effectiveProduct.supportsTemperatureOptions;
 
-    final effectiveTemp = _selectedTemp ?? effectiveProduct.fixedTemperature;
+    final rawSelectedTemp = _selectedTemp?.trim();
+    final effectiveTemp =
+        (rawSelectedTemp != null && rawSelectedTemp.isNotEmpty)
+        ? rawSelectedTemp
+        : (effectiveProduct.fixedTemperature ??
+              effectiveProduct.initialTemperature);
 
     SellableServingsResult? servingsResult;
     if (productsProvider != null &&
         inventoryProvider != null &&
         (productsProvider.recipes.isNotEmpty ||
             !productsProvider.isLoadingRecipes)) {
+      final effectiveInventory =
+          (cartProvider != null && !cartProvider.isEmpty)
+          ? cartProvider.getRemainingInventory(
+              inventoryItems: inventoryProvider.items,
+              recipes: productsProvider.recipes,
+            )
+          : inventoryProvider.items;
       servingsResult = productsProvider.calculateSellableServings(
         product: effectiveProduct,
-        inventoryItems: inventoryProvider.items,
+        inventoryItems: effectiveInventory,
         temperature: effectiveTemp,
       );
     }
@@ -208,12 +233,16 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
       backgroundColor: AppColors.surfaceWhite,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: AppColors.latteBeige, width: 1),
+        borderRadius: BorderRadius.circular(22),
+        side: const BorderSide(color: AppColors.borderSubtle, width: 1.2),
       ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
-        child: SingleChildScrollView(
+      child: AppFadeSlideScale(
+        duration: AppMotion.standard,
+        beginOffset: const Offset(0, 18),
+        beginScale: 0.94,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -222,7 +251,7 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
               Stack(
                 children: [
                   Container(
-                    height: 160,
+                    height: 170,
                     width: double.infinity,
                     color: AppColors.warmCream,
                     child: _buildDialogImage(),
@@ -243,7 +272,7 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 4,
+                                blurRadius: 6,
                                 offset: const Offset(0, 2),
                               ),
                             ],
@@ -252,23 +281,24 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                             statusBadgeText,
                             style: AppTextStyles.badge(
                               color: Colors.white,
-                              fontSize: 13,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ),
                     ),
                   Positioned(
-                    top: 10,
-                    right: 10,
+                    top: 12,
+                    left: 12,
                     child: CircleAvatar(
-                      backgroundColor: Colors.black45,
-                      radius: 16,
+                      backgroundColor: AppColors.surfaceWhite.withValues(alpha: 0.92),
+                      radius: 18,
                       child: IconButton(
                         padding: EdgeInsets.zero,
                         icon: const Icon(
-                          Icons.close_rounded,
-                          color: Colors.white,
+                          Icons.arrow_back_rounded,
+                          color: AppColors.darkCoffee,
                           size: 18,
                         ),
                         onPressed: () => Navigator.pop(context),
@@ -279,11 +309,11 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
               ),
 
               Padding(
-                padding: const EdgeInsets.all(20.0),
+                padding: const EdgeInsets.all(22.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title and Category Badge
+                    // Title, Price & Stock Row
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -291,77 +321,104 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                           child: Text(
                             widget.product.name,
                             style: AppTextStyles.pageTitle(
-                              fontSize: 20,
+                              fontSize: 21,
                               color: AppColors.darkCoffee,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.darkCoffee.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            widget.product.displayCategory,
-                            style: AppTextStyles.badge(
-                              fontSize: 11,
-                              color: AppColors.darkCoffee,
-                            ),
+                        Text(
+                          '₱${unitPrice.toStringAsFixed(unitPrice % 1 == 0 ? 0 : 2)}',
+                          style: AppTextStyles.statNumberLarge(
+                            fontSize: 20,
+                            color: AppColors.forestGreen,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isAvailable
-                                ? AppColors.forestGreen.withValues(alpha: 0.1)
-                                : AppColors.mutedRed.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            isAvailable
-                                ? 'Available'
-                                : (!isProductFlagAvailable
+                        Flexible(
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 9,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.darkCoffee.withValues(
+                                    alpha: 0.08,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  widget.product.displayCategory,
+                                  style: AppTextStyles.badge(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.darkCoffee,
+                                  ),
+                                ),
+                              ),
+                              Builder(
+                                builder: (context) {
+                                  final String statusLabel =
+                                      !isProductFlagAvailable
                                       ? 'Unavailable'
-                                      : 'Out of Stock'),
-                            style: AppTextStyles.badge(
-                              fontSize: 11,
-                              color: isAvailable
-                                  ? AppColors.forestGreen
-                                  : AppColors.mutedRed,
-                            ),
+                                      : (servingsResult?.statusBadgeLabel ??
+                                            'Available');
+                                  final Color statusColor = !isAvailable
+                                      ? AppColors.mutedRed
+                                      : (servingsResult?.isLowStock == true
+                                            ? AppColors.warmBronze
+                                            : AppColors.forestGreen);
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 9,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      statusLabel,
+                                      style: AppTextStyles.badge(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: statusColor,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
 
                     if (widget.product.description.isNotEmpty) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
                       Text(
                         widget.product.description,
                         style: AppTextStyles.body(
                           fontSize: 13,
                           color: AppColors.textSecondary,
-                          height: 1.4,
+                          height: 1.45,
                         ),
                       ),
                     ],
 
                     // --- TEMPERATURE SELECTION ---
                     if (showTemperature) ...[
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 18),
                       Text(
                         'Temperature',
                         style: AppTextStyles.cardTitle(
@@ -369,11 +426,18 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                           color: AppColors.darkCoffee,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Expanded(
                             child: ChoiceChip(
+                              avatar: Icon(
+                                Icons.local_fire_department_rounded,
+                                size: 16,
+                                color: _selectedTemp == 'Hot'
+                                    ? AppColors.surfaceWhite
+                                    : AppColors.warmBronze,
+                              ),
                               label: Text(
                                 'Hot (₱${p.hotPrice!.toInt()})',
                                 style: AppTextStyles.badge(
@@ -389,10 +453,13 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                               selected: _selectedTemp == 'Hot',
                               selectedColor: AppColors.darkCoffee,
                               backgroundColor: AppColors.surfaceWhite,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
                               side: BorderSide(
                                 color: _selectedTemp == 'Hot'
                                     ? AppColors.darkCoffee
-                                    : AppColors.latteBeige,
+                                    : AppColors.borderSubtle,
                               ),
                               onSelected: (selected) {
                                 if (selected) {
@@ -404,6 +471,13 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: ChoiceChip(
+                              avatar: Icon(
+                                Icons.ac_unit_rounded,
+                                size: 16,
+                                color: _selectedTemp == 'Iced'
+                                    ? AppColors.surfaceWhite
+                                    : AppColors.forestGreen,
+                              ),
                               label: Text(
                                 'Iced (₱${p.icedPrice!.toInt()})',
                                 style: AppTextStyles.badge(
@@ -419,10 +493,13 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                               selected: _selectedTemp == 'Iced',
                               selectedColor: AppColors.darkCoffee,
                               backgroundColor: AppColors.surfaceWhite,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
                               side: BorderSide(
                                 color: _selectedTemp == 'Iced'
                                     ? AppColors.darkCoffee
-                                    : AppColors.latteBeige,
+                                    : AppColors.borderSubtle,
                               ),
                               onSelected: (selected) {
                                 if (selected) {
@@ -435,7 +512,7 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                       ),
                     ],
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
 
                     // --- QUANTITY SELECTOR ---
                     Row(
@@ -451,7 +528,7 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                         Container(
                           decoration: BoxDecoration(
                             color: AppColors.warmCream,
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: AppColors.latteBeige),
                           ),
                           child: Row(
@@ -486,21 +563,35 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                                   borderRadius: BorderRadius.circular(6),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
+                                      horizontal: 12,
+                                      vertical: 5,
                                     ),
                                     decoration: BoxDecoration(
                                       color: AppColors.surfaceWhite,
-                                      borderRadius: BorderRadius.circular(6),
+                                      borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
                                         color: AppColors.latteBeige,
                                       ),
                                     ),
-                                    child: Text(
-                                      '$_quantity',
-                                      style: AppTextStyles.statNumber(
-                                        fontSize: 16,
-                                        color: AppColors.darkCoffee,
+                                    child: TweenAnimationBuilder<double>(
+                                      key: ValueKey<int>(_quantity),
+                                      tween: Tween<double>(begin: 0.85, end: 1.0),
+                                      duration: AppMotion.fast,
+                                      curve: Curves.easeOutCubic,
+                                      builder: (context, qScale, qChild) {
+                                        return AppMotion.reduceMotion(context)
+                                            ? qChild!
+                                            : Transform.scale(
+                                                scale: qScale,
+                                                child: qChild,
+                                              );
+                                      },
+                                      child: Text(
+                                        '$_quantity',
+                                        style: AppTextStyles.statNumber(
+                                          fontSize: 16,
+                                          color: AppColors.darkCoffee,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -524,9 +615,9 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                       ],
                     ),
 
-                    const SizedBox(height: 20),
-                    const Divider(color: AppColors.latteBeige),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 22),
+                    const Divider(color: AppColors.borderSubtle),
+                    const SizedBox(height: 12),
 
                     // --- TOTAL & ADD TO CART BUTTON ---
                     Row(
@@ -542,18 +633,35 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                                 color: AppColors.textSecondary,
                               ),
                             ),
-                            Text(
-                              '₱${dialogTotalPrice.toStringAsFixed(dialogTotalPrice % 1 == 0 ? 0 : 2)}',
-                              style: AppTextStyles.statNumber(
-                                fontSize: 20,
-                                color: AppColors.darkCoffee,
+                            TweenAnimationBuilder<double>(
+                              key: ValueKey<double>(dialogTotalPrice),
+                              tween: Tween<double>(begin: 0.92, end: 1.0),
+                              duration: AppMotion.fast,
+                              curve: Curves.easeOutCubic,
+                              builder: (context, priceScale, priceChild) {
+                                return AppMotion.reduceMotion(context)
+                                    ? priceChild!
+                                    : Transform.scale(
+                                        scale: priceScale,
+                                        alignment: Alignment.centerLeft,
+                                        child: priceChild,
+                                      );
+                              },
+                              child: Text(
+                                '₱${dialogTotalPrice.toStringAsFixed(dialogTotalPrice % 1 == 0 ? 0 : 2)}',
+                                style: AppTextStyles.statNumberLarge(
+                                  fontSize: 22,
+                                  color: AppColors.darkCoffee,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
                         Flexible(
-                          child: ElevatedButton.icon(
+                          child: AppPressableScale(
+                            enabled: isAvailable,
+                            child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: isAvailable
                                   ? AppColors.darkCoffee
@@ -561,7 +669,14 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                               foregroundColor: isAvailable
                                   ? AppColors.surfaceWhite
                                   : AppColors.textSecondary,
-                              elevation: isAvailable ? 2 : 0,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            elevation: 0,
                             ),
                             onPressed: isAvailable
                                 ? () {
@@ -604,9 +719,7 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
 
                                     context.read<PosCartProvider>().addToCart(
                                       product: effectiveProduct,
-                                      selectedTemperature:
-                                          _selectedTemp ??
-                                          effectiveProduct.fixedTemperature,
+                                      selectedTemperature: effectiveTemp,
                                       unitPrice: unitPrice,
                                       quantity: _quantity,
                                     );
@@ -642,6 +755,7 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
                               ),
                             ),
                           ),
+                          ),
                         ),
                       ],
                     ),
@@ -651,6 +765,7 @@ class _ProductDetailsDialogState extends State<ProductDetailsDialog> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

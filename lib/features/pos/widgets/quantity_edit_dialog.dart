@@ -78,8 +78,8 @@ class _QuantityEditDialogState extends State<QuantityEditDialog> {
     return AlertDialog(
       backgroundColor: AppColors.surfaceWhite,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: AppColors.latteBeige, width: 1),
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: AppColors.borderSubtle, width: 1.2),
       ),
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,7 +87,7 @@ class _QuantityEditDialogState extends State<QuantityEditDialog> {
           Text(
             widget.title,
             style: AppTextStyles.cardTitle(
-              fontSize: 17,
+              fontSize: 18,
               color: AppColors.darkCoffee,
             ),
           ),
@@ -118,14 +118,14 @@ class _QuantityEditDialogState extends State<QuantityEditDialog> {
               ],
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _submit(),
-              style: AppTextStyles.statNumber(
-                fontSize: 20,
+              style: AppTextStyles.statNumberLarge(
+                fontSize: 22,
                 color: AppColors.darkCoffee,
               ),
               textAlign: TextAlign.center,
               decoration: InputDecoration(
                 contentPadding: const EdgeInsets.symmetric(
-                  vertical: 12,
+                  vertical: 14,
                   horizontal: 16,
                 ),
                 labelText: 'Quantity',
@@ -135,16 +135,16 @@ class _QuantityEditDialogState extends State<QuantityEditDialog> {
                 filled: true,
                 fillColor: AppColors.warmCream,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: AppColors.latteBeige),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: AppColors.latteBeige),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.darkCoffee, width: 1.5),
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.darkCoffee, width: 1.6),
                 ),
               ),
               validator: (value) {
@@ -168,7 +168,7 @@ class _QuantityEditDialogState extends State<QuantityEditDialog> {
           ],
         ),
       ),
-      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
@@ -182,9 +182,10 @@ class _QuantityEditDialogState extends State<QuantityEditDialog> {
             backgroundColor: AppColors.darkCoffee,
             foregroundColor: AppColors.surfaceWhite,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            elevation: 0,
           ),
           onPressed: _submit,
           child: Text(

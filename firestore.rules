@@ -10,12 +10,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Master Owner: Strictly verified via auth token email (Zero deadlock)
+    // Master Owner: Verified via Owner UID or token email (Zero deadlock, migration safe)
     function isOwner() {
-      return isAuthenticated() &&
-        ('email' in request.auth.token) &&
-        (request.auth.token.email == 'iankakilala@gmail.com' ||
-         request.auth.token.email.lower() == 'iankakilala@gmail.com');
+      return isAuthenticated() && (
+        request.auth.uid == 'AF1tkOhq7EUuyKST9HVyANhkVec2' ||
+        (('email' in request.auth.token) &&
+         (request.auth.token.email == 'reintamayao00@gmail.com' ||
+          request.auth.token.email.lower() == 'reintamayao00@gmail.com' ||
+          request.auth.token.email == 'iankakilala@gmail.com' ||
+          request.auth.token.email.lower() == 'iankakilala@gmail.com'))
+      );
     }
 
     // Safe existence checks before any document lookup
@@ -92,6 +96,45 @@ service cloud.firestore {
       let isNotDraft = !('status' in data) || data.status != 'draft';
 
       return (isForAll || isForThisBranch) && isNotDraft;
+    }
+
+    // ===============================================================
+    // RFID HARDWARE ATTENDANCE HELPERS (Additive)
+    // ===============================================================
+
+    function isDeviceAccount() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/device_accounts/$(request.auth.uid));
+    }
+
+    function getDeviceDoc() {
+      return get(/databases/$(database)/documents/device_accounts/$(request.auth.uid)).data;
+    }
+
+    function isDeviceActive() {
+      return isDeviceAccount() &&
+        ('active' in getDeviceDoc()) &&
+        getDeviceDoc().active == true;
+    }
+
+    function getDeviceBranch() {
+      return isDeviceActive() && ('branchId' in getDeviceDoc())
+        ? getDeviceDoc().branchId
+        : '';
+    }
+
+    function isDeviceAuthorizedForBranch(branchId) {
+      let dev = getDeviceDoc();
+      return isDeviceActive() && branchId is string && branchId != '' && (
+        (('branchId' in dev) && dev.branchId == branchId) ||
+        (('authorizedBranchIds' in dev) && dev.authorizedBranchIds is list && branchId in dev.authorizedBranchIds)
+      );
+    }
+
+    function isValidRfidForEmployee(rfidUid, employeeId, branchId) {
+      return exists(/databases/$(database)/documents/rfid_registry/$(rfidUid)) &&
+        get(/databases/$(database)/documents/rfid_registry/$(rfidUid)).data.employeeId == employeeId &&
+        get(/databases/$(database)/documents/rfid_registry/$(rfidUid)).data.branchId == branchId &&
+        get(/databases/$(database)/documents/rfid_registry/$(rfidUid)).data.active == true;
     }
 
     // ===============================================================
@@ -226,11 +269,218 @@ service cloud.firestore {
     }
 
     match /attendance/{attendanceId} {
+      // 1. Existing Owner Master Access (Preserved)
       allow read, write: if isOwner();
+
+      // 2. Additive RFID Hardware Device Rules (Strict Branch-Isolated & Anti-Probing)
+      allow get: if isDeviceActive() && resource != null && isDeviceAuthorizedForBranch(resource.data.branchId);
+
+      allow create: if isDeviceActive() &&
+        request.resource.data.keys().hasOnly([
+          'attendanceId', 'employeeId', 'employeeName', 'branchId',
+          'branchName', 'date', 'timeIn', 'timeOut', 'status', 'rfidUid',
+          'timeInEventId', 'timeOutEventId'
+        ]) &&
+        request.resource.data.attendanceId == attendanceId &&
+        attendanceId == request.resource.data.employeeId + '_' + request.resource.data.date &&
+        isDeviceAuthorizedForBranch(request.resource.data.branchId) &&
+        request.resource.data.timeIn == request.time &&
+        request.resource.data.timeOut == null &&
+        request.resource.data.status == 'present' &&
+        isValidRfidForEmployee(
+          request.resource.data.rfidUid,
+          request.resource.data.employeeId,
+          request.resource.data.branchId
+        ) &&
+        request.resource.data.employeeName == get(/databases/$(database)/documents/rfid_registry/$(request.resource.data.rfidUid)).data.employeeName &&
+        (
+          (('branchName' in getDeviceDoc()) && request.resource.data.branchName == getDeviceDoc().branchName) ||
+          (('branchName' in get(/databases/$(database)/documents/rfid_registry/$(request.resource.data.rfidUid)).data) && request.resource.data.branchName == get(/databases/$(database)/documents/rfid_registry/$(request.resource.data.rfidUid)).data.branchName)
+        );
+
+      allow update: if isDeviceActive() &&
+        isDeviceAuthorizedForBranch(resource.data.branchId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timeOut', 'rfidUid', 'timeOutEventId']) &&
+        request.resource.data.attendanceId == resource.data.attendanceId &&
+        request.resource.data.employeeId == resource.data.employeeId &&
+        request.resource.data.branchId == resource.data.branchId &&
+        request.resource.data.timeIn == resource.data.timeIn &&
+        resource.data.timeOut == null &&
+        request.resource.data.timeOut == request.time &&
+        isValidRfidForEmployee(
+          request.resource.data.rfidUid,
+          resource.data.employeeId,
+          resource.data.branchId
+        );
     }
 
     match /quota_history/{docId} {
       allow read, write: if isOwner();
+    }
+
+    // ===============================================================
+    // 7. BRANCH PAYMENT SETTINGS — GCASH-ONLY PERMISSION FIX
+    // ===============================================================
+    match /branch_payment_settings/{branchId} {
+      allow read: if isOwner() ||
+        (
+          isValidBranchAccount() &&
+          branchId == getAssignedBranch()
+        );
+
+      allow write: if isOwner();
+    }
+    // ===============================================================
+    // 8. RFID HARDWARE REGISTRIES (Isolated Device Access)
+    // ===============================================================
+    match /device_accounts/{uid} {
+      allow get: if isAuthenticated() && request.auth.uid == uid;
+      allow list, write: if isOwner();
+    }
+
+    match /rfid_registry/{rfidUid} {
+      allow get: if isDeviceActive() &&
+        resource.data.active == true &&
+        isDeviceAuthorizedForBranch(resource.data.branchId);
+      allow list, write: if isOwner();
+    }
+
+    // ===============================================================
+    // 9. RFID ENROLLMENT SESSIONS (Hardware Integration)
+    // ===============================================================
+    match /admin_clock_probes/{userId} {
+      allow read, write: if isOwner();
+    }
+
+    match /rfid_enrollment/{deviceId} {
+      allow read, write: if isOwner();
+
+      // Device can read its own session
+      allow get: if isDeviceActive() && request.auth.uid == deviceId;
+
+      // Device can capture card UID only if waiting and unexpired
+      allow update: if isDeviceActive() &&
+        request.auth.uid == deviceId &&
+        isDeviceAuthorizedForBranch(resource.data.branchId) &&
+        resource.data.status == 'waiting' &&
+        resource.data.expiresAt > request.time &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'scannedUid', 'capturedAt']) &&
+        request.resource.data.status == 'captured' &&
+        request.resource.data.scannedUid is string &&
+        request.resource.data.scannedUid.matches('^[0-9A-Fa-f]{8,14}$') &&
+        request.resource.data.capturedAt == request.time;
+    }
+
+    // ===============================================================
+    // 10. MANUAL PRODUCT SERVINGS & QUOTA LEDGERS (Checkpoint 6.3 & 6.3.1)
+    // ===============================================================
+    match /branch_product_servings/{docId} {
+      // 1. Read: Owner or active branch account assigned to this branch
+      allow read: if isOwner() || (
+        isValidBranchAccount() &&
+        isDocumentForAssignedBranch(resource.data)
+      );
+
+      // 2. Create/Delete: Strictly Owner-Only (POS cannot create or delete quotas)
+      allow create, delete: if isOwner();
+
+      // 3. Update: Owner, or valid atomic POS checkout quota decrement
+      allow update: if isOwner() || (
+        isValidBranchAccount() &&
+        // Strict branch isolation: document belongs to caller's branch
+        isDocumentForAssignedBranch(resource.data) &&
+        // Deterministic ID format: {branchId}_{productId}
+        docId == resource.data.branchId + '_' + resource.data.productId &&
+        // Immutable identity and configuration fields
+        request.resource.data.branchId == resource.data.branchId &&
+        request.resource.data.productId == resource.data.productId &&
+        request.resource.data.manualMaxServings == resource.data.manualMaxServings &&
+        request.resource.data.isEnabled == resource.data.isEnabled &&
+        // Only remainingServings, lastSaleId, and timestamps can be modified
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['remainingServings', 'lastSaleId', 'updatedAt', 'lastUpdated', 'updated_at']) &&
+        // Strict non-negative integer
+        request.resource.data.remainingServings is int &&
+        request.resource.data.remainingServings >= 0 &&
+        // Monotonic non-increase: must decrease, OR remain 0 if already 0 (zero-balance offline overdraft)
+        (
+          request.resource.data.remainingServings < resource.data.remainingServings ||
+          (resource.data.remainingServings == 0 && request.resource.data.remainingServings == 0)
+        ) &&
+        // lastSaleId must be a valid non-empty string
+        ('lastSaleId' in request.resource.data) &&
+        request.resource.data.lastSaleId is string &&
+        request.resource.data.lastSaleId.size() > 0 &&
+        // Associated sale must exist in the transaction, belong to this branch, and contain this productId
+        existsAfter(/databases/$(database)/documents/sales/$(request.resource.data.lastSaleId)) &&
+        getAfter(/databases/$(database)/documents/sales/$(request.resource.data.lastSaleId)).data.branchId == getAssignedBranch() &&
+        (resource.data.productId in getAfter(/databases/$(database)/documents/sales/$(request.resource.data.lastSaleId)).data.productQuantities) &&
+        // Associated quota transaction ledger record must exist in the transaction and match pre/post values
+        existsAfter(/databases/$(database)/documents/quota_transactions/$(request.resource.data.lastSaleId + '_' + resource.data.productId)) &&
+        getAfter(/databases/$(database)/documents/quota_transactions/$(request.resource.data.lastSaleId + '_' + resource.data.productId)).data.previousRemaining == resource.data.remainingServings &&
+        getAfter(/databases/$(database)/documents/quota_transactions/$(request.resource.data.lastSaleId + '_' + resource.data.productId)).data.newRemaining == request.resource.data.remainingServings &&
+        getAfter(/databases/$(database)/documents/quota_transactions/$(request.resource.data.lastSaleId + '_' + resource.data.productId)).data.deductedQuantity == resource.data.remainingServings - request.resource.data.remainingServings
+      );
+    }
+
+    match /quota_transactions/{txId} {
+      // 1. Read: Owner or active branch account assigned to this branch
+      allow read: if isOwner() || (
+        isValidBranchAccount() &&
+        isDocumentForAssignedBranch(resource.data)
+      );
+
+      // 2. Update/Delete: Strictly Owner-Only (Audit ledgers are append-only / immutable)
+      allow update, delete: if isOwner();
+
+      // 3. Create: Owner, or valid atomic POS checkout deduction/overdraft ledger
+      allow create: if isOwner() || (
+        isValidBranchAccount() &&
+        // Strict branch isolation: ledger belongs to caller's branch
+        isDocumentForAssignedBranch(request.resource.data) &&
+        // Deterministic transaction ID: {saleId}_{productId}
+        txId == request.resource.data.saleId + '_' + request.resource.data.productId &&
+        // Valid types and non-negative integer quantities
+        request.resource.data.saleId is string && request.resource.data.saleId.size() > 0 &&
+        request.resource.data.clientSaleId is string && request.resource.data.clientSaleId.size() > 0 &&
+        request.resource.data.branchId is string && request.resource.data.branchId == getAssignedBranch() &&
+        request.resource.data.productId is string && request.resource.data.productId.size() > 0 &&
+        request.resource.data.requestedQuantity is int && request.resource.data.requestedQuantity > 0 &&
+        request.resource.data.deductedQuantity is int && request.resource.data.deductedQuantity >= 0 &&
+        request.resource.data.overdraftQuantity is int && request.resource.data.overdraftQuantity >= 0 &&
+        request.resource.data.previousRemaining is int && request.resource.data.previousRemaining >= 0 &&
+        request.resource.data.newRemaining is int && request.resource.data.newRemaining >= 0 &&
+        // Conservation formula: deducted + overdraft == requested
+        request.resource.data.deductedQuantity + request.resource.data.overdraftQuantity == request.resource.data.requestedQuantity &&
+        // Deducted cannot exceed previous quota
+        request.resource.data.deductedQuantity <= request.resource.data.previousRemaining &&
+        // If overdraft occurs (> 0), remaining must be clamped to 0 and deducted must equal previousRemaining
+        (request.resource.data.overdraftQuantity == 0 || (
+          request.resource.data.newRemaining == 0 &&
+          request.resource.data.deductedQuantity == request.resource.data.previousRemaining
+        )) &&
+        // If no overdraft (0), newRemaining must exactly equal previousRemaining - deductedQuantity
+        (request.resource.data.overdraftQuantity > 0 || (
+          request.resource.data.newRemaining == request.resource.data.previousRemaining - request.resource.data.deductedQuantity
+        )) &&
+        // Link to associated sale in the transaction: must exist, branch match, clientSaleId match, and quantity match
+        existsAfter(/databases/$(database)/documents/sales/$(request.resource.data.saleId)) &&
+        getAfter(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.branchId == getAssignedBranch() &&
+        getAfter(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.clientSaleId == request.resource.data.clientSaleId &&
+        (request.resource.data.productId in getAfter(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.productQuantities) &&
+        getAfter(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.productQuantities[request.resource.data.productId] == request.resource.data.requestedQuantity &&
+        // Overdraft metadata consistency in the sale document
+        (request.resource.data.overdraftQuantity == 0 || (
+          getAfter(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.hasManualQuotaOverdraft == true &&
+          (request.resource.data.productId in getAfter(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.manualQuotaOverdrafts) &&
+          getAfter(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.manualQuotaOverdrafts[request.resource.data.productId] == request.resource.data.overdraftQuantity
+        )) &&
+        // Link to associated quota document: must exist and match pre-state and post-state
+        exists(/databases/$(database)/documents/branch_product_servings/$(request.resource.data.branchId + '_' + request.resource.data.productId)) &&
+        get(/databases/$(database)/documents/branch_product_servings/$(request.resource.data.branchId + '_' + request.resource.data.productId)).data.remainingServings == request.resource.data.previousRemaining &&
+        existsAfter(/databases/$(database)/documents/branch_product_servings/$(request.resource.data.branchId + '_' + request.resource.data.productId)) &&
+        getAfter(/databases/$(database)/documents/branch_product_servings/$(request.resource.data.branchId + '_' + request.resource.data.productId)).data.remainingServings == request.resource.data.newRemaining &&
+        getAfter(/databases/$(database)/documents/branch_product_servings/$(request.resource.data.branchId + '_' + request.resource.data.productId)).data.lastSaleId == request.resource.data.saleId
+      );
     }
   }
 }

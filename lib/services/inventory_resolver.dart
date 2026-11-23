@@ -69,13 +69,24 @@ class InventoryDocumentResolver {
   }
 
   Future<InventoryDocumentAdapter?> _lookupById(String docId) async {
-    final lookup = docByIdLookup;
-    if (lookup != null) {
-      return lookup(docId);
+    try {
+      final lookup = docByIdLookup;
+      if (lookup != null) {
+        return await lookup(docId);
+      }
+      final db = firestore ?? FirebaseFirestore.instance;
+      final doc = await db.collection(FirebasePaths.inventory).doc(docId).get();
+      return FirestoreDocumentAdapter(doc);
+    } on FirebaseException catch (e) {
+      // Security rules that inspect `resource.data` throw `permission-denied`
+      // when a canonical document ID does not exist (`resource == null`).
+      // Allow fallback to alternative ID and field-query resolution, while
+      // letting field queries propagate genuine branch permission failures.
+      if (e.code == 'permission-denied' || e.code == 'not-found') {
+        return null;
+      }
+      rethrow;
     }
-    final db = firestore ?? FirebaseFirestore.instance;
-    final doc = await db.collection(FirebasePaths.inventory).doc(docId).get();
-    return FirestoreDocumentAdapter(doc);
   }
 
   Future<List<InventoryDocumentAdapter>> _queryByFields(String branchId, String ingredientId) async {
@@ -120,7 +131,7 @@ class InventoryDocumentResolver {
     final canonicalDoc = await _lookupById(canonicalId);
     if (canonicalDoc != null && canonicalDoc.exists && canonicalDoc.data != null) {
       final docBranch = (canonicalDoc.data?['branchId'] as String? ?? '').trim().toLowerCase();
-      if (docBranch.isEmpty || docBranch == cleanBranch.toLowerCase()) {
+      if (docBranch == cleanBranch.toLowerCase()) {
         return canonicalDoc;
       }
     }
@@ -132,8 +143,7 @@ class InventoryDocumentResolver {
       final altDoc = await _lookupById(altId);
       if (altDoc != null && altDoc.exists && altDoc.data != null) {
         final docBranch = (altDoc.data?['branchId'] as String? ?? '').trim().toLowerCase();
-        if (docBranch.isEmpty ||
-            docBranch == cleanBranch.toLowerCase() ||
+        if (docBranch == cleanBranch.toLowerCase() ||
             docBranch == altBranch.toLowerCase()) {
           return altDoc;
         }
@@ -145,7 +155,10 @@ class InventoryDocumentResolver {
     if (candidates.length == 1) {
       final match = candidates.first;
       if (match.exists && match.data != null) {
-        return match;
+        final docBranch = (match.data?['branchId'] as String? ?? '').trim().toLowerCase();
+        if (docBranch == cleanBranch.toLowerCase()) {
+          return match;
+        }
       }
     } else if (candidates.length > 1) {
       throw Exception(
@@ -160,7 +173,11 @@ class InventoryDocumentResolver {
       if (altCandidates.length == 1) {
         final match = altCandidates.first;
         if (match.exists && match.data != null) {
-          return match;
+          final docBranch = (match.data?['branchId'] as String? ?? '').trim().toLowerCase();
+          if (docBranch == cleanBranch.toLowerCase() ||
+              docBranch == altBranch.toLowerCase()) {
+            return match;
+          }
         }
       } else if (altCandidates.length > 1) {
         throw Exception(

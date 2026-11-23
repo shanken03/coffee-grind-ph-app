@@ -24,6 +24,7 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surfaceWhite,
         foregroundColor: AppColors.darkCoffee,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
         scrolledUnderElevation: 0,
@@ -33,6 +34,7 @@ class AppTheme {
           letterSpacing: 0.3,
         ),
         iconTheme: const IconThemeData(color: AppColors.darkCoffee),
+        actionsIconTheme: const IconThemeData(color: AppColors.darkCoffee),
       ),
       tabBarTheme: TabBarThemeData(
         indicatorColor: AppColors.forestGreen,
@@ -44,7 +46,7 @@ class AppTheme {
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.surfaceWhite,
-        selectedItemColor: AppColors.forestGreen,
+        selectedItemColor: AppColors.darkCoffee,
         unselectedItemColor: AppColors.textSecondary,
         selectedLabelStyle: AppTextStyles.navLabelSelected(fontSize: 11),
         unselectedLabelStyle: AppTextStyles.navLabel(fontSize: 11, fontWeight: FontWeight.normal),
@@ -53,26 +55,26 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: AppColors.surfaceWhite,
-        elevation: 1,
-        shadowColor: Colors.black12,
+        elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.latteBeige, width: 1),
+          side: const BorderSide(color: AppColors.borderSubtle, width: 1.2),
         ),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surfaceWhite,
-        elevation: 6,
+        elevation: 8,
         titleTextStyle: AppTextStyles.dialogTitle(),
         contentTextStyle: AppTextStyles.body(color: AppColors.textSecondary),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppColors.latteBeige, width: 1),
+          side: const BorderSide(color: AppColors.borderSubtle, width: 1.2),
         ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: AppColors.surfaceWhite,
         modalBackgroundColor: AppColors.surfaceWhite,
+        elevation: 12,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
@@ -110,6 +112,10 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.darkCoffee,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
           textStyle: AppTextStyles.button(
             color: AppColors.darkCoffee,
             fontSize: 14,
@@ -122,15 +128,23 @@ class AppTheme {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.latteBeige),
+          borderSide: const BorderSide(color: AppColors.latteBeige, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.latteBeige),
+          borderSide: const BorderSide(color: AppColors.latteBeige, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.darkCoffee, width: 1.5),
+          borderSide: const BorderSide(color: AppColors.darkCoffee, width: 1.6),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.mutedRed, width: 1.2),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.mutedRed, width: 1.6),
         ),
         hintStyle: AppTextStyles.inputHint(),
         labelStyle: AppTextStyles.formLabel(),
@@ -158,13 +172,16 @@ class AppTheme {
         ),
       ),
       dividerTheme: const DividerThemeData(
-        color: AppColors.latteBeige,
+        color: AppColors.borderSubtle,
         thickness: 1,
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.darkCoffee,
         contentTextStyle: AppTextStyles.subtitle(color: Colors.white, fontSize: 14),
         behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
       ),
     );
   }

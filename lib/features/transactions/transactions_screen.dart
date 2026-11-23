@@ -44,6 +44,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final filtered = _getFilteredTransactions(txProvider.transactions);
 
     return Scaffold(
+      backgroundColor: AppColors.warmCream,
       appBar: AppBar(
         title: Text(
           'Sales & Transactions',
@@ -52,23 +53,32 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             fontSize: 20,
           ),
         ),
+        elevation: 0,
+        backgroundColor: AppColors.surfaceWhite,
+        foregroundColor: AppColors.darkCoffee,
+        surfaceTintColor: Colors.transparent,
       ),
       body: SafeArea(
         child: Column(
           children: [
             // Top Filter & Search Bar
             Container(
-              color: AppColors.surfaceWhite,
-              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: AppColors.surfaceWhite,
+                border: Border(
+                  bottom: BorderSide(color: AppColors.borderSubtle, width: 1),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Column(
                 children: [
                   TextField(
                     onChanged: (val) => setState(() => _searchQuery = val),
-                    style: AppTextStyles.inputField(),
+                    style: AppTextStyles.inputField(fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Search transaction ID or item...',
-                      hintStyle: AppTextStyles.inputHint(),
-                      prefixIcon: const Icon(Icons.search_rounded, color: AppColors.darkCoffee),
+                      hintStyle: AppTextStyles.inputHint(fontSize: 13),
+                      prefixIcon: const Icon(Icons.search_rounded, color: AppColors.darkCoffee, size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear_rounded, size: 18),
@@ -97,18 +107,25 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             children: ['All', 'Today', 'This Week'].map((f) {
                               final isSelected = _dateFilter == f;
                               return Padding(
-                                padding: const EdgeInsets.only(right: 6.0),
+                                padding: const EdgeInsets.only(right: 8.0),
                                 child: ChoiceChip(
                                   label: Text(
                                     f,
                                     style: AppTextStyles.badge(
-                                      color: isSelected ? AppColors.surfaceWhite : AppColors.textSecondary,
+                                      color: isSelected ? AppColors.surfaceWhite : AppColors.darkCoffee,
+                                      fontSize: 12,
                                     ),
                                   ),
                                   selected: isSelected,
-                                  selectedColor: AppColors.forestGreen,
-                                  backgroundColor: AppColors.surfaceWhite,
-                                  side: BorderSide(color: isSelected ? AppColors.forestGreen : AppColors.latteBeige),
+                                  selectedColor: AppColors.darkCoffee,
+                                  backgroundColor: AppColors.warmCream,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  side: BorderSide(
+                                    color: isSelected ? AppColors.darkCoffee : AppColors.borderSubtle,
+                                  ),
+                                  showCheckmark: false,
                                   onSelected: (selected) {
                                     if (selected) setState(() => _dateFilter = f);
                                   },
@@ -124,8 +141,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               ),
             ),
 
-            const Divider(height: 1, color: AppColors.latteBeige),
-
             // Transactions List
             Expanded(
               child: filtered.isEmpty
@@ -133,12 +148,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.receipt_long_outlined,
-                            size: 64,
-                            color: AppColors.textSecondary.withValues(alpha: 0.5),
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceWhite,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppColors.borderSubtle),
+                            ),
+                            child: Icon(
+                              Icons.receipt_long_outlined,
+                              size: 48,
+                              color: AppColors.textSecondary.withValues(alpha: 0.6),
+                            ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 16),
                           Text(
                             'No transactions found.',
                             style: AppTextStyles.cardTitle(
@@ -155,13 +178,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       itemBuilder: (context, index) {
                         final tx = filtered[index];
                         final timeStr = DateFormat('MMM d, yyyy • h:mm a').format(tx.timestamp);
+                        final isGCash = tx.paymentMethod.toLowerCase().contains('gcash');
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
                             color: AppColors.surfaceWhite,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.latteBeige, width: 1),
+                            border: Border.all(color: AppColors.borderSubtle, width: 1),
+                            boxShadow: AppColors.cardShadow,
                           ),
                           child: InkWell(
                             onTap: () => _showTransactionDetails(tx),
@@ -176,39 +201,79 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                                     children: [
                                       Row(
                                         children: [
-                                          const Icon(
-                                            Icons.receipt_rounded,
-                                            color: AppColors.darkCoffee,
-                                            size: 20,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            tx.transactionId,
-                                            style: AppTextStyles.cardTitle(
-                                              fontSize: 15,
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.warmCream,
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: const Icon(
+                                              Icons.receipt_rounded,
                                               color: AppColors.darkCoffee,
+                                              size: 18,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                tx.transactionId,
+                                                style: AppTextStyles.cardTitle(
+                                                  fontSize: 15,
+                                                  color: AppColors.darkCoffee,
+                                                ),
+                                              ),
+                                              Text(
+                                                timeStr,
+                                                style: AppTextStyles.caption(
+                                                  fontSize: 11,
+                                                  color: AppColors.textSecondary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: isGCash
+                                                  ? Colors.blue.withValues(alpha: 0.12)
+                                                  : AppColors.forestGreen.withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              tx.paymentMethod,
+                                              style: AppTextStyles.badge(
+                                                fontSize: 10,
+                                                color: isGCash ? Colors.blue.shade800 : AppColors.forestGreen,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.forestGreen.withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              tx.status,
+                                              style: AppTextStyles.badge(
+                                                fontSize: 11,
+                                                color: AppColors.forestGreen,
+                                              ),
                                             ),
                                           ),
                                         ],
                                       ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.forestGreen.withValues(alpha: 0.12),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          tx.status,
-                                          style: AppTextStyles.badge(
-                                            fontSize: 11,
-                                            color: AppColors.forestGreen,
-                                          ),
-                                        ),
-                                      ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 12),
                                   Text(
                                     tx.itemsSummary,
                                     maxLines: 2,
@@ -218,25 +283,33 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                                       color: AppColors.textSecondary,
                                     ),
                                   ),
-                                  const Divider(height: 20, color: AppColors.latteBeige),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        timeStr,
-                                        style: AppTextStyles.caption(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondary,
-                                        ),
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    padding: const EdgeInsets.only(top: 10),
+                                    decoration: const BoxDecoration(
+                                      border: Border(
+                                        top: BorderSide(color: AppColors.borderSubtle, width: 1),
                                       ),
-                                      Text(
-                                        '₱${tx.totalAmount.toStringAsFixed(2)}',
-                                        style: AppTextStyles.statNumber(
-                                          fontSize: 16,
-                                          color: AppColors.darkCoffee,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          '${tx.items.length} ${tx.items.length == 1 ? 'item' : 'items'}',
+                                          style: AppTextStyles.caption(
+                                            fontSize: 12,
+                                            color: AppColors.textSecondary,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                        Text(
+                                          '₱${tx.totalAmount.toStringAsFixed(2)}',
+                                          style: AppTextStyles.statNumber(
+                                            fontSize: 17,
+                                            color: AppColors.darkCoffee,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
@@ -260,16 +333,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       builder: (ctx) {
         return AlertDialog(
           backgroundColor: AppColors.surfaceWhite,
+          surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: AppColors.latteBeige),
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: AppColors.borderSubtle),
           ),
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                tx.transactionId,
-                style: AppTextStyles.dialogTitle(fontSize: 18, color: AppColors.darkCoffee),
+              Expanded(
+                child: Text(
+                  tx.transactionId,
+                  style: AppTextStyles.dialogTitle(fontSize: 17, color: AppColors.darkCoffee),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -292,23 +369,27 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Date: $timeStr',
-                  style: AppTextStyles.caption(fontSize: 12, color: AppColors.textSecondary),
-                ),
-                Text(
-                  'Branch: ${tx.branchName}',
-                  style: AppTextStyles.caption(fontSize: 12, color: AppColors.textSecondary),
-                ),
-                Text(
-                  'Payment: ${tx.paymentMethod}',
-                  style: AppTextStyles.caption(fontSize: 12, color: AppColors.textSecondary),
-                ),
-                if (tx.gcashReference != null && tx.gcashReference!.isNotEmpty)
-                  Text(
-                    'GCash Ref: ${tx.gcashReference}',
-                    style: AppTextStyles.caption(fontSize: 12, color: AppColors.textSecondary),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warmCream,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderSubtle),
                   ),
+                  child: Column(
+                    children: [
+                      _buildReceiptRow('Date', timeStr),
+                      const SizedBox(height: 6),
+                      _buildReceiptRow('Branch', tx.branchName),
+                      const SizedBox(height: 6),
+                      _buildReceiptRow('Payment', tx.paymentMethod),
+                      if (tx.gcashReference != null && tx.gcashReference!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        _buildReceiptRow('GCash Ref', tx.gcashReference!),
+                      ],
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Items Purchased:',
@@ -335,7 +416,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
                   ),
                 ),
-                const Divider(height: 24, color: AppColors.latteBeige),
+                const Divider(height: 24, color: AppColors.borderSubtle),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -358,11 +439,37 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
               child: Text('Close', style: AppTextStyles.button(color: AppColors.darkCoffee, fontSize: 13)),
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildReceiptRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.caption(fontSize: 12, color: AppColors.textSecondary),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: AppTextStyles.tableCell(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.darkCoffee,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

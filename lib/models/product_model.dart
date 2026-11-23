@@ -260,6 +260,36 @@ class ProductModel {
     return null;
   }
 
+  /// Whether this product belongs to an active supported category (Coffee Series or Non Coffee Series).
+  /// Obsolete categories (Frappe, Refreshers, Foods, Sweets, and unrecognized categories) are not supported.
+  bool get isSupportedCategory {
+    final clean = categoryName.toLowerCase().replaceAll(' ', '').replaceAll('-', '').replaceAll('_', '');
+    if (clean.contains('frappe') ||
+        clean.contains('refresher') ||
+        clean.contains('food') ||
+        clean.contains('meal') ||
+        clean.contains('sweet') ||
+        clean.contains('pastr') ||
+        clean.contains('dessert') ||
+        clean.contains('cookie') ||
+        clean.contains('cake') ||
+        clean.contains('muffin')) {
+      return false;
+    }
+    if (category == ProductCategory.frappe ||
+        category == ProductCategory.refreshers ||
+        category == ProductCategory.foods ||
+        category == ProductCategory.sweets) {
+      return false;
+    }
+    if (clean.contains('noncoffee')) return true;
+    if (clean.contains('coffee')) return true;
+    if (categoryName.isNotEmpty) {
+      return false;
+    }
+    return category == ProductCategory.coffee || category == ProductCategory.nonCoffee;
+  }
+
   const ProductModel({
     required this.productId,
     required this.name,
@@ -275,10 +305,18 @@ class ProductModel {
   }) : isAvailable = isActive ?? isAvailable;
 
   String get displayCategory {
+    final clean = categoryName.toLowerCase().replaceAll(' ', '').replaceAll('-', '').replaceAll('_', '');
+    if (clean.contains('noncoffee')) return 'Non Coffee Series';
+    if (clean.contains('coffee') &&
+        !clean.contains('frappe') &&
+        !clean.contains('cake') &&
+        !clean.contains('cookie') &&
+        !clean.contains('sweet') &&
+        !clean.contains('food')) {
+      return 'Coffee Series';
+    }
     if (categoryName.isNotEmpty) {
       final lower = categoryName.toLowerCase().trim();
-      if (lower == 'coffee') return 'Coffee Series';
-      if (lower == 'non coffee' || lower == 'non-coffee' || lower == 'noncoffee') return 'Non Coffee Series';
       if (lower == 'frappe' || lower == 'frappes') return 'Frappe';
       if (lower == 'refreshers' || lower == 'refresher') return 'Refreshers';
       if (lower == 'foods' || lower == 'food') return 'Foods';

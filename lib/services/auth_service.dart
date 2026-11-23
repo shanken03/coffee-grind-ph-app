@@ -15,7 +15,17 @@ class BranchInfo {
 }
 
 class AuthService {
+  final FirebaseAuth? _customAuth;
+  final FirebaseFirestore? _customFirestore;
+
+  AuthService({
+    FirebaseAuth? auth,
+    FirebaseFirestore? firestore,
+  })  : _customAuth = auth,
+        _customFirestore = firestore;
+
   FirebaseAuth? get _auth {
+    if (_customAuth != null) return _customAuth;
     try {
       return FirebaseAuth.instance;
     } catch (_) {
@@ -24,6 +34,7 @@ class AuthService {
   }
 
   FirebaseFirestore? get _firestore {
+    if (_customFirestore != null) return _customFirestore;
     try {
       return FirebaseFirestore.instance;
     } catch (_) {
@@ -68,9 +79,12 @@ class AuthService {
       }
 
       final data = doc.data()!;
-      final accountType = (data['accountType'] as String? ?? '').toLowerCase();
 
-      if (accountType != 'branch') {
+      // 1. Account type and role validation
+      final hasRole = data.containsKey('role') && data['role'] != null;
+      final hasAccountType = data.containsKey('accountType') && data['accountType'] != null;
+
+      if (!hasRole && !hasAccountType) {
         await signOutBranch();
         throw FirebaseAuthException(
           code: 'unauthorized-device',
@@ -78,14 +92,119 @@ class AuthService {
         );
       }
 
-      final branchId = data['branchId'] as String? ?? '';
-      if (branchId.isEmpty) {
+      final roleVal = hasRole ? (data['role'] as String? ?? '').trim().toLowerCase() : null;
+      final accountTypeVal = hasAccountType ? (data['accountType'] as String? ?? '').trim().toLowerCase() : null;
+
+      const authorizedRoles = {'branch', 'staff'};
+
+      if (hasRole && !authorizedRoles.contains(roleVal)) {
         await signOutBranch();
         throw FirebaseAuthException(
           code: 'unauthorized-device',
           message: 'This account is not authorized for the Staff App.',
         );
       }
+
+      if (hasAccountType && !authorizedRoles.contains(accountTypeVal)) {
+        await signOutBranch();
+        throw FirebaseAuthException(
+          code: 'unauthorized-device',
+          message: 'This account is not authorized for the Staff App.',
+        );
+      }
+
+      // If both fields exist and conflict, reject session
+      if (hasRole && hasAccountType && roleVal != accountTypeVal) {
+        await signOutBranch();
+        throw FirebaseAuthException(
+          code: 'unauthorized-device',
+          message: 'Account role configuration conflict.',
+        );
+      }
+
+      // 2. Active account validation
+      final hasActive = data.containsKey('active') && data['active'] != null;
+      final hasIsActive = data.containsKey('isActive') && data['isActive'] != null;
+      final hasStatus = data.containsKey('status') && data['status'] != null;
+
+      if (!hasActive && !hasIsActive && !hasStatus) {
+        await signOutBranch();
+        throw FirebaseAuthException(
+          code: 'unauthorized-device',
+          message: 'Account active status is missing or ambiguous.',
+        );
+      }
+
+      bool? boolActive;
+      if (hasActive && hasIsActive) {
+        final a = data['active'] == true;
+        final ia = data['isActive'] == true;
+        if (a != ia) {
+          await signOutBranch();
+          throw FirebaseAuthException(
+            code: 'user-disabled',
+            message: 'This branch account has been disabled. Please contact the administrator.',
+          );
+        }
+        boolActive = a;
+      } else if (hasActive) {
+        boolActive = data['active'] == true;
+      } else if (hasIsActive) {
+        boolActive = data['isActive'] == true;
+      }
+
+      bool? statusActive;
+      if (hasStatus) {
+        final statusStr = (data['status'] as String? ?? '').trim().toLowerCase();
+        if (statusStr == 'active' || statusStr == 'open') {
+          statusActive = true;
+        } else {
+          statusActive = false;
+        }
+      }
+
+      // Reject if boolean flag and status string contradict each other
+      if (boolActive != null && statusActive != null && boolActive != statusActive) {
+        await signOutBranch();
+        throw FirebaseAuthException(
+          code: 'user-disabled',
+          message: 'This branch account has been disabled. Please contact the administrator.',
+        );
+      }
+
+      final isAccountActive = (boolActive ?? statusActive) == true;
+      if (!isAccountActive) {
+        await signOutBranch();
+        throw FirebaseAuthException(
+          code: 'user-disabled',
+          message: 'This branch account has been disabled. Please contact the administrator.',
+        );
+      }
+
+      // 3. Branch ID validation
+      final hasBranchId = data.containsKey('branchId') && data['branchId'] != null;
+      final hasSnakeBranchId = data.containsKey('branch_id') && data['branch_id'] != null;
+
+      final branchIdVal = hasBranchId ? (data['branchId'] as String? ?? '').trim() : '';
+      final snakeBranchIdVal = hasSnakeBranchId ? (data['branch_id'] as String? ?? '').trim() : '';
+
+      if (branchIdVal.isEmpty && snakeBranchIdVal.isEmpty) {
+        await signOutBranch();
+        throw FirebaseAuthException(
+          code: 'unauthorized-device',
+          message: 'This account has no valid branch assignment.',
+        );
+      }
+
+      if (branchIdVal.isNotEmpty && snakeBranchIdVal.isNotEmpty && branchIdVal != snakeBranchIdVal) {
+        await signOutBranch();
+        throw FirebaseAuthException(
+          code: 'unauthorized-device',
+          message: 'Branch assignment conflict detected.',
+        );
+      }
+
+      final branchId = branchIdVal.isNotEmpty ? branchIdVal : snakeBranchIdVal;
 
       String branchName = data['branchName'] as String? ?? data['name'] as String? ?? '';
 
@@ -140,12 +259,12 @@ class AuthService {
       );
     }
 
-    final cleanEmail = email.trim();
-    final cleanPassword = password.trim();
+    final cleanEmail = email.trim().toLowerCase();
+    // Password is NEVER trimmed, lowercased, or modified
 
     final userCredential = await auth.signInWithEmailAndPassword(
       email: cleanEmail,
-      password: cleanPassword,
+      password: password,
     );
 
     final user = userCredential.user;
@@ -157,6 +276,20 @@ class AuthService {
     }
 
     return await verifyAndGetBranchInfo(user);
+  }
+
+  /// Send password reset email using Firebase Authentication
+  Future<void> sendPasswordResetEmail(String email) async {
+    final auth = _auth;
+    if (auth == null) {
+      throw FirebaseAuthException(
+        code: 'app-not-initialized',
+        message: 'Firebase is not initialized.',
+      );
+    }
+
+    final cleanEmail = email.trim().toLowerCase();
+    await auth.sendPasswordResetEmail(email: cleanEmail);
   }
 
   /// Sign out branch device

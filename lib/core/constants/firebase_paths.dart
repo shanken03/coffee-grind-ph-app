@@ -22,4 +22,6 @@ class FirebasePaths {
   static const String announcements = 'announcements';
   static const String concerns = 'concerns';
   static const String branchPaymentSettings = 'branch_payment_settings';
+  static const String branchProductServings = 'branch_product_servings';
+  static const String quotaTransactions = 'quota_transactions';
 }

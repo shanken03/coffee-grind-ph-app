@@ -1,40 +1,74 @@
 import 'dart:async';
+import 'dart:math' as math;
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/constants/firebase_paths.dart';
+import '../models/branch_product_serving_model.dart';
+import '../models/pending_offline_order.dart';
+import '../models/quota_transaction_model.dart';
 import '../models/transaction_model.dart';
 import '../models/cart_item_model.dart';
 import '../models/product_model.dart';
 import '../models/recipe_model.dart';
 import '../services/inventory_resolver.dart';
+import '../services/offline_order_queue_service.dart';
 
 class TransactionsProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore;
   final InventoryDocumentResolver _resolver;
+  final OfflineOrderStorage _offlineStorage;
+  final Future<bool> Function()? _onlineChecker;
+
   StreamSubscription<QuerySnapshot>? _salesSubscription;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   TransactionsProvider({
     FirebaseFirestore? firestore,
     InventoryDocumentResolver? resolver,
+    OfflineOrderStorage? offlineStorage,
+    Future<bool> Function()? checkIsOnline,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _resolver =
            resolver ??
            InventoryDocumentResolver(
              firestore: firestore ?? FirebaseFirestore.instance,
-           );
+           ),
+       _offlineStorage = offlineStorage ?? FileOfflineOrderStorage(),
+       _onlineChecker = checkIsOnline {
+    _initConnectivityListener();
+  }
 
   List<TransactionModel> _transactions = [];
+  List<PendingOfflineOrder> _pendingOrders = [];
   bool _isLoading = true;
+  bool _isOffline = false;
+  bool _isSyncingOffline = false;
   String? _currentBranchId;
 
-  List<TransactionModel> get transactions => List.unmodifiable(_transactions);
+  List<TransactionModel> get transactions {
+    final syncedIds = _transactions.map((t) => t.transactionId).toSet();
+    final pendingTx = _pendingOrders
+        .where((o) => !syncedIds.contains(o.clientSaleId))
+        .map((o) => o.toTransactionModel())
+        .toList();
+    final merged = [...pendingTx, ..._transactions]
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return List.unmodifiable(merged);
+  }
+
+  List<PendingOfflineOrder> get pendingOfflineOrders =>
+      List.unmodifiable(_pendingOrders);
+  int get pendingOfflineCount => _pendingOrders.length;
   bool get isLoading => _isLoading;
+  bool get isOffline => _isOffline;
+  bool get isSyncingOffline => _isSyncingOffline;
 
   double get todaySales {
     final now = DateTime.now();
-    return _transactions
+    return transactions
         .where((t) {
           return t.timestamp.year == now.year &&
               t.timestamp.month == now.month &&
@@ -45,17 +79,85 @@ class TransactionsProvider extends ChangeNotifier {
 
   int get todayTransactionCount {
     final now = DateTime.now();
-    return _transactions.where((t) {
+    return transactions.where((t) {
       return t.timestamp.year == now.year &&
           t.timestamp.month == now.month &&
           t.timestamp.day == now.day;
     }).length;
   }
 
-  void bindToBranch(String branchId) {
+  void _initConnectivityListener() {
+    if (_onlineChecker != null) return;
+    try {
+      // Ensure Flutter bindings are initialized before registering platform
+      // stream listeners (plain Dart unit tests run without bindings).
+      WidgetsBinding.instance;
+      _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
+        (results) {
+          final hasNetwork =
+              results.isNotEmpty &&
+              results.any((r) => r != ConnectivityResult.none);
+          final wasOffline = _isOffline;
+          _isOffline = !hasNetwork;
+          if (wasOffline != _isOffline) {
+            notifyListeners();
+          }
+          if (hasNetwork && _pendingOrders.isNotEmpty) {
+            unawaited(syncPendingOrders());
+          }
+        },
+        onError: (_) {},
+      );
+    } catch (_) {
+      // Ignore in unit test environments without platform channels
+    }
+  }
+
+  Future<bool> _isNetworkAvailable() async {
+    if (_onlineChecker != null) {
+      final online = await _onlineChecker();
+      _isOffline = !online;
+      return online;
+    }
+    try {
+      final results = await Connectivity().checkConnectivity();
+      final online =
+          results.isNotEmpty &&
+          results.any((r) => r != ConnectivityResult.none);
+      _isOffline = !online;
+      return online;
+    } catch (_) {
+      // Fallback to online in unit tests where connectivity plugin is unavailable
+      return true;
+    }
+  }
+
+  bool _isConnectivityError(Object error) {
+    if (error is FirebaseException) {
+      final code = error.code.toLowerCase();
+      if (code == 'unavailable' ||
+          code == 'deadline-exceeded' ||
+          code == 'network-request-failed') {
+        return true;
+      }
+    }
+    final msg = error.toString().toLowerCase();
+    return msg.contains('offline') ||
+        msg.contains('unavailable') ||
+        msg.contains('network-request-failed') ||
+        msg.contains('socketexception') ||
+        msg.contains('failed to get document');
+  }
+
+  Future<void> bindToBranch(String branchId) async {
     if (_currentBranchId == branchId && _salesSubscription != null) return;
     _currentBranchId = branchId;
+    _pendingOrders = await _offlineStorage.load(branchId);
     _listenToSales(branchId);
+
+    if (_pendingOrders.isNotEmpty && await _isNetworkAvailable()) {
+      unawaited(syncPendingOrders());
+    }
   }
 
   TransactionModel _mapDocToTransaction(
@@ -99,6 +201,14 @@ class TransactionsProvider extends ChangeNotifier {
       ts = DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
     }
 
+    Map<String, int> manualOverdrafts = {};
+    if (data['manualQuotaOverdrafts'] is Map) {
+      final rawMap = data['manualQuotaOverdrafts'] as Map;
+      manualOverdrafts = rawMap.map(
+        (k, v) => MapEntry(k.toString(), (v as num).toInt()),
+      );
+    }
+
     return TransactionModel(
       transactionId: data['saleId'] as String? ?? docId,
       timestamp: ts,
@@ -112,6 +222,8 @@ class TransactionsProvider extends ChangeNotifier {
       grossProfit: (data['grossProfit'] as num?)?.toDouble(),
       otherExpenses: (data['otherExpenses'] as num?)?.toDouble(),
       netProfit: (data['netProfit'] as num?)?.toDouble(),
+      hasManualQuotaOverdraft: data['hasManualQuotaOverdraft'] as bool? ?? false,
+      manualQuotaOverdrafts: manualOverdrafts,
     );
   }
 
@@ -159,7 +271,173 @@ class TransactionsProvider extends ChangeNotifier {
     String cashierId = 'STAFF_DEVICE',
     String cashierName = 'Store Staff',
     String? clientSaleId,
+    DateTime? orderTimestamp,
   }) async {
+    final saleId = (clientSaleId != null && clientSaleId.isNotEmpty)
+        ? clientSaleId
+        : 'SALE-${DateTime.now().millisecondsSinceEpoch}';
+
+    final online = await _isNetworkAvailable();
+    if (!online) {
+      return _enqueueOfflineOrder(
+        clientSaleId: saleId,
+        branchId: branchId,
+        branchName: branchName,
+        items: items,
+        totalAmount: totalAmount,
+        paymentMethod: paymentMethod,
+        gcashReference: gcashReference,
+        cashierId: cashierId,
+        cashierName: cashierName,
+      );
+    }
+
+    try {
+      return await _executeOnlineTransaction(
+        branchId: branchId,
+        branchName: branchName,
+        items: items,
+        totalAmount: totalAmount,
+        paymentMethod: paymentMethod,
+        gcashReference: gcashReference,
+        cashierId: cashierId,
+        cashierName: cashierName,
+        clientSaleId: saleId,
+        orderTimestamp: orderTimestamp,
+        isOfflineSync: false,
+      );
+    } catch (e) {
+      if (_isConnectivityError(e)) {
+        _isOffline = true;
+        return _enqueueOfflineOrder(
+          clientSaleId: saleId,
+          branchId: branchId,
+          branchName: branchName,
+          items: items,
+          totalAmount: totalAmount,
+          paymentMethod: paymentMethod,
+          gcashReference: gcashReference,
+          cashierId: cashierId,
+          cashierName: cashierName,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<TransactionModel> _enqueueOfflineOrder({
+    required String clientSaleId,
+    required String branchId,
+    required String branchName,
+    required List<CartItemModel> items,
+    required double totalAmount,
+    required String paymentMethod,
+    String? gcashReference,
+    required String cashierId,
+    required String cashierName,
+  }) async {
+    final existingIdx = _pendingOrders.indexWhere(
+      (o) => o.clientSaleId == clientSaleId,
+    );
+    if (existingIdx >= 0) {
+      return _pendingOrders[existingIdx].toTransactionModel();
+    }
+
+    final order = PendingOfflineOrder(
+      clientSaleId: clientSaleId,
+      branchId: branchId,
+      branchName: branchName,
+      items: List<CartItemModel>.from(items),
+      totalAmount: totalAmount,
+      paymentMethod: paymentMethod,
+      gcashReference: gcashReference?.trim(),
+      cashierId: cashierId,
+      cashierName: cashierName,
+      createdAtMillis: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    _pendingOrders.add(order);
+    await _offlineStorage.save(branchId, _pendingOrders);
+    notifyListeners();
+    return order.toTransactionModel();
+  }
+
+  /// Pushes all queued offline orders to Firebase in FIFO order when online.
+  Future<void> syncPendingOrders() async {
+    final branchId = _currentBranchId;
+    if (_isSyncingOffline || _pendingOrders.isEmpty || branchId == null) {
+      return;
+    }
+    if (!await _isNetworkAvailable()) return;
+
+    _isSyncingOffline = true;
+    notifyListeners();
+
+    try {
+      final queueCopy = List<PendingOfflineOrder>.from(_pendingOrders);
+      for (final order in queueCopy) {
+        if (!await _isNetworkAvailable()) break;
+
+        try {
+          await _executeOnlineTransaction(
+            branchId: order.branchId,
+            branchName: order.branchName,
+            items: order.items,
+            totalAmount: order.totalAmount,
+            paymentMethod: order.paymentMethod,
+            gcashReference: order.gcashReference,
+            cashierId: order.cashierId,
+            cashierName: order.cashierName,
+            clientSaleId: order.clientSaleId,
+            orderTimestamp: order.createdAt,
+            isOfflineSync: true,
+          );
+
+          _pendingOrders.removeWhere(
+            (o) => o.clientSaleId == order.clientSaleId,
+          );
+          await _offlineStorage.save(branchId, _pendingOrders);
+          notifyListeners();
+        } catch (e) {
+          if (_isConnectivityError(e)) {
+            _isOffline = true;
+            break;
+          }
+          // Record non-connectivity error on this order so it doesn't block
+          // subsequent valid orders in the queue.
+          final idx = _pendingOrders.indexWhere(
+            (o) => o.clientSaleId == order.clientSaleId,
+          );
+          if (idx >= 0) {
+            _pendingOrders[idx] = _pendingOrders[idx].copyWith(
+              syncError: e.toString().replaceAll('Exception: ', ''),
+            );
+            await _offlineStorage.save(branchId, _pendingOrders);
+            notifyListeners();
+          }
+        }
+      }
+    } finally {
+      _isSyncingOffline = false;
+      notifyListeners();
+    }
+  }
+
+  Future<TransactionModel> _executeOnlineTransaction({
+    required String branchId,
+    required String branchName,
+    required List<CartItemModel> items,
+    required double totalAmount,
+    required String paymentMethod,
+    String? gcashReference,
+    String cashierId = 'STAFF_DEVICE',
+    String cashierName = 'Store Staff',
+    String? clientSaleId,
+    DateTime? orderTimestamp,
+    bool isOfflineSync = false,
+  }) async {
+    final bool isOffline = isOfflineSync;
+
     // 1. Idempotency Check: if clientSaleId is provided, check if transaction already exists
     if (clientSaleId != null && clientSaleId.isNotEmpty) {
       final existingSale = await _firestore
@@ -188,8 +466,20 @@ class TransactionsProvider extends ChangeNotifier {
         : 'SALE-${DateTime.now().millisecondsSinceEpoch}';
     final docRef = _firestore.collection(FirebasePaths.sales).doc(saleId);
 
+    // Aggregate cart/sale quantities by productId (combining all temperatures & sizes)
+    final Map<String, int> productQuantities = {};
+    final Map<String, String> productNames = {};
+    for (final item in items) {
+      final pId = item.product.productId;
+      productQuantities[pId] = (productQuantities[pId] ?? 0) + item.quantity;
+      productNames[pId] = item.product.name;
+    }
+
     final itemsMap = items.map((i) {
-      final effectiveTemp = i.selectedTemperature ?? i.product.fixedTemperature;
+      final rawTemp = i.selectedTemperature?.trim();
+      final effectiveTemp = (rawTemp != null && rawTemp.isNotEmpty)
+          ? rawTemp
+          : (i.product.fixedTemperature ?? i.product.initialTemperature);
       return {
         'productId': i.product.productId,
         'productName': i.product.name,
@@ -276,8 +566,10 @@ class TransactionsProvider extends ChangeNotifier {
         recipeDoc.id,
         recipeDoc.data() as Map<String, dynamic>,
       );
-      final effectiveTemp =
-          item.selectedTemperature ?? item.product.fixedTemperature;
+      final rawTemp = item.selectedTemperature?.trim();
+      final effectiveTemp = (rawTemp != null && rawTemp.isNotEmpty)
+          ? rawTemp
+          : (item.product.fixedTemperature ?? item.product.initialTemperature);
       final reqs = recipe.getRequirementsForTemperature(effectiveTemp);
       if (reqs.isEmpty) {
         throw Exception(
@@ -359,6 +651,7 @@ class TransactionsProvider extends ChangeNotifier {
       'cashierName': cashierName,
       'employeeId': cashierId,
       'employeeName': cashierName,
+      'productQuantities': productQuantities,
       'items': itemsMap,
       'subtotal': totalAmount,
       'total': totalAmount,
@@ -370,8 +663,12 @@ class TransactionsProvider extends ChangeNotifier {
         'gcashReference': gcashReference.trim(),
         'gcash_reference': gcashReference.trim(),
       },
-      'timestamp': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
+      'timestamp': orderTimestamp != null
+          ? Timestamp.fromDate(orderTimestamp)
+          : FieldValue.serverTimestamp(),
+      'createdAt': orderTimestamp != null
+          ? Timestamp.fromDate(orderTimestamp)
+          : FieldValue.serverTimestamp(),
       'status': 'Completed',
       'inventoryDeducted': true,
       'inventoryDeductedAt': FieldValue.serverTimestamp(),
@@ -417,6 +714,20 @@ class TransactionsProvider extends ChangeNotifier {
         currentInventoryStock[ingId] = qty;
       }
 
+      // Step B.2: Read all applicable branch_product_servings documents inside transaction
+      // (ALL READS MUST PRECEDE ANY WRITES)
+      final Map<String, DocumentSnapshot> quotaSnapshots = {};
+      final Map<String, DocumentReference> quotaDocRefs = {};
+      for (final pId in productQuantities.keys) {
+        final docId = BranchProductServingModel.buildDocumentId(branchId, pId);
+        final qRef = _firestore
+            .collection(FirebasePaths.branchProductServings)
+            .doc(docId);
+        quotaDocRefs[pId] = qRef;
+        final qSnap = await transaction.get(qRef);
+        quotaSnapshots[pId] = qSnap;
+      }
+
       // Step C: Validate physical inventory stock sufficiency
       for (final entry in requiredDeductions.entries) {
         final ingId = entry.key;
@@ -431,10 +742,92 @@ class TransactionsProvider extends ChangeNotifier {
         }
       }
 
+      // Step C.2: Validate manual product servings quota sufficiency
+      final Map<String, int> quotaNewRemaining = {};
+      final Map<String, int> quotaPreviousRemaining = {};
+      final Map<String, int> quotaDeductedQty = {};
+      final Map<String, int> quotaOverdraftQty = {};
+      final Map<String, int> saleOverdraftMap = {};
+
+      for (final entry in productQuantities.entries) {
+        final pId = entry.key;
+        final requested = entry.value;
+        final qSnap = quotaSnapshots[pId];
+
+        // Missing quota document: preserve physical inventory fallback
+        if (qSnap == null || !qSnap.exists || qSnap.data() == null) {
+          continue;
+        }
+
+        final qData = qSnap.data() as Map<String, dynamic>;
+        final isEnabled = qData['isEnabled'] as bool? ?? true;
+
+        // Disabled quota: preserve physical inventory fallback
+        if (!isEnabled) {
+          continue;
+        }
+
+        final currentRemaining =
+            (qData['remainingServings'] as num?)?.toInt() ?? 0;
+        quotaPreviousRemaining[pId] = currentRemaining;
+
+        if (!isOffline) {
+          // ONLINE SALE: Strict validation
+          if (currentRemaining < requested) {
+            final pName = productNames[pId] ?? pId;
+            final summary = currentRemaining <= 0
+                ? 'Manual quota for "$pName" is out of stock (0 servings remaining)'
+                : 'Insufficient manual quota for "$pName": requested $requested, but only $currentRemaining servings remaining';
+            throw Exception('Cannot complete sale: $summary');
+          }
+
+          final newRemaining = currentRemaining - requested;
+          if (newRemaining < 0) {
+            throw Exception(
+              'Cannot complete sale: remaining manual servings cannot be negative ($newRemaining)',
+            );
+          }
+          quotaNewRemaining[pId] = newRemaining;
+          quotaDeductedQty[pId] = requested;
+          quotaOverdraftQty[pId] = 0;
+        } else {
+          // OFFLINE SYNC: Allow overdraft, clamp remainingServings to 0
+          final available = math.max(0, currentRemaining);
+          final deducted = math.min(requested, available);
+          final overdraft = requested - deducted;
+          final newRemaining = math.max(0, currentRemaining - deducted);
+
+          quotaNewRemaining[pId] = newRemaining;
+          quotaDeductedQty[pId] = deducted;
+          quotaOverdraftQty[pId] = overdraft;
+
+          if (overdraft > 0) {
+            saleOverdraftMap[pId] = overdraft;
+          }
+        }
+      }
+
       // --- ALL READS & VALIDATIONS COMPLETE; PERFORM ALL ATOMIC WRITES ---
 
-      // Step D: Write complete sale record
-      transaction.set(docRef, saleData);
+      // Step D: Write complete sale record with overdraft metadata
+      final hasOverdraft = saleOverdraftMap.isNotEmpty;
+      final finalSaleData = Map<String, dynamic>.from(saleData);
+      finalSaleData['hasManualQuotaOverdraft'] = hasOverdraft;
+      finalSaleData['manualQuotaOverdrafts'] = saleOverdraftMap;
+
+      if (hasOverdraft) {
+        final overdraftDetails = saleOverdraftMap.entries.map((e) {
+          final pName = productNames[e.key] ?? e.key;
+          return '$pName (${e.value} serving${e.value == 1 ? '' : 's'} over quota)';
+        }).join(', ');
+        final existingNotes = finalSaleData['notes'] as String?;
+        final overdraftNote = '[OFFLINE OVERDRAFT] $overdraftDetails';
+        finalSaleData['notes'] = (existingNotes != null && existingNotes.isNotEmpty)
+            ? '$existingNotes | $overdraftNote'
+            : overdraftNote;
+      }
+
+      transaction.set(docRef, finalSaleData);
 
       // Step E: Decrement branch inventory & write audit logs
       for (final entry in requiredDeductions.entries) {
@@ -473,9 +866,53 @@ class TransactionsProvider extends ChangeNotifier {
         });
       }
 
+      // Step E.2: Decrement enabled manual quota & write quota ledger records
+      for (final pId in quotaNewRemaining.keys) {
+        final newRemaining = quotaNewRemaining[pId]!;
+        final prevRemaining = quotaPreviousRemaining[pId] ?? 0;
+        final requested = productQuantities[pId] ?? 0;
+        final deducted = quotaDeductedQty[pId] ?? requested;
+        final overdraft = quotaOverdraftQty[pId] ?? 0;
+        final qRef = quotaDocRefs[pId]!;
+
+        transaction.update(qRef, {
+          'remainingServings': newRemaining,
+          'lastSaleId': saleId,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+
+        final ledgerDocId = QuotaTransactionModel.buildTransactionId(
+          saleId,
+          pId,
+        );
+        final ledgerRef = _firestore
+            .collection(FirebasePaths.quotaTransactions)
+            .doc(ledgerDocId);
+
+        final ledgerRecord = QuotaTransactionModel(
+          transactionId: ledgerDocId,
+          saleId: saleId,
+          clientSaleId: clientSaleId ?? saleId,
+          branchId: branchId,
+          productId: pId,
+          productName: productNames[pId] ?? '',
+          requestedQuantity: requested,
+          deductedQuantity: deducted,
+          overdraftQuantity: overdraft,
+          previousRemaining: prevRemaining,
+          newRemaining: newRemaining,
+          isOfflineSync: isOffline,
+          cashierId: cashierId,
+          cashierName: cashierName,
+        );
+
+        transaction.set(ledgerRef, ledgerRecord.toMap());
+      }
+
       return TransactionModel(
         transactionId: saleId,
-        timestamp: DateTime.now(),
+        timestamp: orderTimestamp ?? DateTime.now(),
         branchName: branchName,
         items: items,
         totalAmount: totalAmount,
@@ -486,6 +923,8 @@ class TransactionsProvider extends ChangeNotifier {
         grossProfit: grossProfit,
         otherExpenses: otherExpenses,
         netProfit: netProfit,
+        hasManualQuotaOverdraft: hasOverdraft,
+        manualQuotaOverdrafts: saleOverdraftMap,
       );
     });
 
@@ -504,6 +943,7 @@ class TransactionsProvider extends ChangeNotifier {
   @override
   void dispose() {
     _salesSubscription?.cancel();
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 }

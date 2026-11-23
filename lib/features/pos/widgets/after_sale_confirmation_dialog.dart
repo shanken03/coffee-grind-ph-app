@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_animations.dart';
 import '../../../models/transaction_model.dart';
 
 class AfterSaleConfirmationDialog extends StatefulWidget {
@@ -46,38 +47,54 @@ class _AfterSaleConfirmationDialogState extends State<AfterSaleConfirmationDialo
 
     return Dialog(
       backgroundColor: AppColors.surfaceWhite,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: AppColors.latteBeige, width: 1),
+        side: const BorderSide(color: AppColors.borderSubtle, width: 1),
       ),
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(22.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Success Header Icon
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.forestGreen.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_rounded,
-                    color: AppColors.forestGreen,
-                    size: 44,
+      child: AppFadeSlideScale(
+        duration: AppMotion.standard,
+        beginOffset: const Offset(0, 18),
+        beginScale: 0.94,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Success Header Icon with pop checkmark animation
+                Center(
+                  child: AppCheckoutSuccessCheckmark(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: (tx.status == 'Pending Sync'
+                                ? AppColors.amber
+                                : AppColors.forestGreen)
+                            .withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        tx.status == 'Pending Sync'
+                            ? Icons.cloud_off_rounded
+                            : Icons.check_circle_rounded,
+                        color: tx.status == 'Pending Sync'
+                            ? AppColors.amber
+                            : AppColors.forestGreen,
+                        size: 44,
+                      ),
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(height: 14),
 
               Text(
-                'Sale Completed Successfully',
+                tx.status == 'Pending Sync'
+                    ? 'Order Saved Offline'
+                    : 'Sale Completed Successfully',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.pageTitle(
                   fontSize: 20,
@@ -86,11 +103,15 @@ class _AfterSaleConfirmationDialogState extends State<AfterSaleConfirmationDialo
               ),
               const SizedBox(height: 4),
               Text(
-                'Recorded to Firebase Real-time Database',
+                tx.status == 'Pending Sync'
+                    ? 'Will automatically push to Firebase when internet returns'
+                    : 'Recorded to Firebase Real-time Database',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.subtitle(
                   fontSize: 12,
-                  color: AppColors.textSecondary.withValues(alpha: 0.8),
+                  color: tx.status == 'Pending Sync'
+                      ? AppColors.amber
+                      : AppColors.textSecondary.withValues(alpha: 0.8),
                 ),
               ),
               const SizedBox(height: 18),
@@ -101,7 +122,7 @@ class _AfterSaleConfirmationDialogState extends State<AfterSaleConfirmationDialo
                 decoration: BoxDecoration(
                   color: AppColors.warmCream,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.latteBeige),
+                  border: Border.all(color: AppColors.borderSubtle),
                 ),
                 child: Column(
                   children: [
@@ -136,18 +157,19 @@ class _AfterSaleConfirmationDialogState extends State<AfterSaleConfirmationDialo
                 decoration: BoxDecoration(
                   color: AppColors.surfaceWhite,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.latteBeige),
+                  border: Border.all(color: AppColors.borderSubtle),
+                  boxShadow: AppColors.cardShadow,
                 ),
                 child: Column(
                   children: [
                     _buildBreakdownRow('Total Sales', '₱${tx.totalAmount.toStringAsFixed(2)}', isBold: true),
-                    const Divider(height: 16, color: AppColors.latteBeige),
+                    const Divider(height: 16, color: AppColors.borderSubtle),
                     _buildBreakdownRow('Cost of Goods Sold (COGS)', cogsDisplay, isSubtle: cogsDisplay == 'Not Available'),
                     const SizedBox(height: 8),
                     _buildBreakdownRow('Gross Profit', grossProfitDisplay, isSubtle: grossProfitDisplay == 'Not Available', isProfit: grossProfitDisplay != 'Not Available'),
                     const SizedBox(height: 8),
                     _buildBreakdownRow('Other Expenses', otherExpensesDisplay),
-                    const Divider(height: 16, color: AppColors.latteBeige),
+                    const Divider(height: 16, color: AppColors.borderSubtle),
                     _buildBreakdownRow('Net Profit', netProfitDisplay, isBold: true, isProfit: netProfitDisplay != 'Not Available'),
                   ],
                 ),
@@ -174,52 +196,75 @@ class _AfterSaleConfirmationDialogState extends State<AfterSaleConfirmationDialo
                 ),
               ),
 
-              if (_showItems) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.warmCream.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.latteBeige),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Ordered Items:',
-                        style: AppTextStyles.cardTitle(
-                          fontSize: 13,
-                          color: AppColors.darkCoffee,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ...tx.items.map((item) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 3.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              AnimatedSize(
+                duration: AppMotion.resolveDuration(
+                  context,
+                  AppMotion.standard,
+                ),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: _showItems
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: AppFadeSlideScale(
+                          duration: AppMotion.standard,
+                          beginOffset: const Offset(0, 8),
+                          beginScale: 0.98,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.warmCream.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.borderSubtle),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    '${item.quantity}x ${item.product.name} (${item.variantLabel})',
-                                    style: AppTextStyles.bodySmall(color: AppColors.darkCoffee, fontSize: 12),
+                                Text(
+                                  'Ordered Items:',
+                                  style: AppTextStyles.cardTitle(
+                                    fontSize: 13,
+                                    color: AppColors.darkCoffee,
                                   ),
                                 ),
-                                Text(
-                                  '₱${item.subtotal.toStringAsFixed(2)}',
-                                  style: AppTextStyles.tableCell(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.darkCoffee,
+                                const SizedBox(height: 8),
+                                ...tx.items.map(
+                                  (item) => Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 3.0,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            '${item.quantity}x ${item.product.name} (${item.variantLabel})',
+                                            style: AppTextStyles.bodySmall(
+                                              color: AppColors.darkCoffee,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                        Text(
+                                          '₱${item.subtotal.toStringAsFixed(2)}',
+                                          style: AppTextStyles.tableCell(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.darkCoffee,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                          )),
-                    ],
-                  ),
-                ),
-              ],
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
 
               const SizedBox(height: 20),
 
@@ -227,34 +272,39 @@ class _AfterSaleConfirmationDialogState extends State<AfterSaleConfirmationDialo
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: AppColors.darkCoffee),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: widget.onBackToDashboard,
-                      child: Text(
-                        'Dashboard',
-                        style: AppTextStyles.button(
-                          color: AppColors.darkCoffee,
+                    child: AppPressableScale(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: const BorderSide(color: AppColors.borderSubtle, width: 1.2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: widget.onBackToDashboard,
+                        child: Text(
+                          'Dashboard',
+                          style: AppTextStyles.button(
+                            color: AppColors.darkCoffee,
+                          ),
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.darkCoffee,
-                        foregroundColor: AppColors.surfaceWhite,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: widget.onNewSale,
-                      child: Text(
-                        'New Sale',
-                        style: AppTextStyles.button(color: AppColors.surfaceWhite),
+                    child: AppPressableScale(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.darkCoffee,
+                          foregroundColor: AppColors.surfaceWhite,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: widget.onNewSale,
+                        child: Text(
+                          'New Sale',
+                          style: AppTextStyles.button(color: AppColors.surfaceWhite),
+                        ),
                       ),
                     ),
                   ),
@@ -263,6 +313,7 @@ class _AfterSaleConfirmationDialogState extends State<AfterSaleConfirmationDialo
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -312,11 +363,16 @@ class _AfterSaleConfirmationDialogState extends State<AfterSaleConfirmationDialo
             color: isBold ? AppColors.darkCoffee : AppColors.textSecondary,
           ),
         ),
-        Text(
-          value,
-          style: AppTextStyles.statNumber(
-            fontSize: 14,
-            color: valueColor,
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.statNumber(
+              fontSize: 14,
+              color: valueColor,
+            ),
           ),
         ),
       ],

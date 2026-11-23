@@ -264,5 +264,136 @@ void main() {
       expect(InventoryDocumentResolver.getAlternativeBranchId('santa_cruz'), isNull);
       expect(InventoryDocumentResolver.getAlternativeBranchId('LSPU'), isNull);
     });
+
+    test('9. Missing canonical ID raising permission-denied falls back safely to alternative ID and field query', () async {
+      final altDoc = FakeInventoryDocumentAdapter(
+        id: 'STACRUZ_beans',
+        data: {
+          'branchId': 'STACRUZ',
+          'ingredientId': 'beans',
+          'quantity': 420.0,
+          'unit': 'g',
+          'ingredientName': 'Coffee Beans',
+        },
+      );
+
+      final resolverAlt = InventoryDocumentResolver(
+        docByIdLookup: (docId) async {
+          if (docId == 'br_stacruz_beans') {
+            throw FirebaseException(
+              plugin: 'cloud_firestore',
+              code: 'permission-denied',
+              message: 'Missing canonical document evaluates resource == null',
+            );
+          }
+          if (docId == 'STACRUZ_beans') return altDoc;
+          return null;
+        },
+        fieldQueryLookup: (bId, iId) async => [],
+      );
+
+      final resolvedViaAlt = await resolverAlt.resolve(
+        branchId: 'br_stacruz',
+        ingredientId: 'beans',
+        ingredientName: 'Coffee Beans',
+        branchName: 'Santa Cruz',
+      );
+      expect(resolvedViaAlt.id, 'STACRUZ_beans');
+
+      final fieldMatchDoc = FakeInventoryDocumentAdapter(
+        id: 'auto_id_beans_1',
+        data: {
+          'branchId': 'br_stacruz',
+          'ingredientId': 'beans',
+          'quantity': 300.0,
+          'unit': 'g',
+        },
+      );
+
+      final resolverQuery = InventoryDocumentResolver(
+        docByIdLookup: (docId) async {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+            message: 'Direct get denied when resource == null',
+          );
+        },
+        fieldQueryLookup: (bId, iId) async {
+          if (bId == 'br_stacruz' && iId == 'beans') return [fieldMatchDoc];
+          return [];
+        },
+      );
+
+      final resolvedViaQuery = await resolverQuery.resolve(
+        branchId: 'br_stacruz',
+        ingredientId: 'beans',
+        ingredientName: 'Coffee Beans',
+        branchName: 'Santa Cruz',
+      );
+      expect(resolvedViaQuery.id, 'auto_id_beans_1');
+    });
+
+    test('10. Real permission-denied on branch field query is propagated, not swallowed', () async {
+      final resolver = InventoryDocumentResolver(
+        docByIdLookup: (docId) async => null,
+        fieldQueryLookup: (bId, iId) async {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+            message: 'Unauthorized branch query',
+          );
+        },
+      );
+
+      expect(
+        () => resolver.resolve(
+          branchId: 'br_stacruz',
+          ingredientId: 'beans',
+          ingredientName: 'Coffee Beans',
+          branchName: 'Santa Cruz',
+        ),
+        throwsA(
+          isA<FirebaseException>().having(
+            (e) => e.code,
+            'code',
+            'permission-denied',
+          ),
+        ),
+      );
+    });
+
+    test('11. Branchless or foreign-branch direct lookup docs are rejected', () async {
+      final docs = <String, InventoryDocumentAdapter>{
+        'br_stacruz_beans': FakeInventoryDocumentAdapter(
+          id: 'br_stacruz_beans',
+          data: {
+            'branchId': '',
+            'ingredientId': 'beans',
+            'quantity': 500.0,
+          },
+        ),
+      };
+
+      final resolver = InventoryDocumentResolver(
+        docByIdLookup: (docId) async => docs[docId],
+        fieldQueryLookup: (bId, iId) async => [],
+      );
+
+      expect(
+        () => resolver.resolve(
+          branchId: 'br_stacruz',
+          ingredientId: 'beans',
+          ingredientName: 'Coffee Beans',
+          branchName: 'Santa Cruz',
+        ),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Missing inventory record'),
+          ),
+        ),
+      );
+    });
   });
 }

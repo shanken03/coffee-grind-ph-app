@@ -895,5 +895,112 @@ void main() {
       final allSalesSnap = await fakeDb.collection(FirebasePaths.sales).get();
       expect(allSalesSnap.docs.length, 2);
     });
+
+    test('11. Dual-temperature product checkout with null temperature defaults to Iced and never deducts Hot packaging', () async {
+      final dualItemNoTemp = CartItemModel(
+        id: 'dual_null_temp',
+        product: prodAmericano,
+        selectedTemperature: null, // Should resolve to 'Iced' via initialTemperature
+        unitPrice: 110.0,
+        quantity: 1,
+      );
+
+      final tx = await transactionsProvider.addTransaction(
+        branchId: branchA,
+        branchName: 'Santa Cruz',
+        items: [dualItemNoTemp],
+        totalAmount: 110.0,
+        paymentMethod: 'Cash',
+        clientSaleId: 'DUAL_FALLBACK_TEST_01',
+      );
+
+      expect(tx.transactionId, 'DUAL_FALLBACK_TEST_01');
+
+      final saleDoc = await fakeDb
+          .collection(FirebasePaths.sales)
+          .doc('DUAL_FALLBACK_TEST_01')
+          .get();
+      final saleItems = saleDoc.data()?['items'] as List<dynamic>;
+      expect(saleItems.first['selectedTemperature'], 'Iced');
+
+      // Iced packaging deducted by 1 each (seeded at 100.0 -> 99.0)
+      final icedCup = await fakeDb.collection(FirebasePaths.inventory).doc('${branchA}_pkg_16oz_cup').get();
+      final icedLid = await fakeDb.collection(FirebasePaths.inventory).doc('${branchA}_pkg_iced_lid').get();
+      final straw = await fakeDb.collection(FirebasePaths.inventory).doc('${branchA}_pkg_straw').get();
+      expect(icedCup.data()?['quantity'], 99.0);
+      expect(icedLid.data()?['quantity'], 99.0);
+      expect(straw.data()?['quantity'], 99.0);
+
+      // Hot packaging untouched (seeded at 100.0; must NEVER deduct Hot + Iced together)
+      final hotCup = await fakeDb.collection(FirebasePaths.inventory).doc('${branchA}_pkg_12oz_cup').get();
+      final hotLid = await fakeDb.collection(FirebasePaths.inventory).doc('${branchA}_pkg_hot_lid').get();
+      expect(hotCup.data()?['quantity'], 100.0);
+      expect(hotLid.data()?['quantity'], 100.0);
+    });
+
+    test('12. Back-to-back checkout stock protection prevents overselling last available serving', () async {
+      // Limit Branch A Espresso Beans to exactly 18g (enough for only 1 Americano)
+      await fakeDb
+          .collection(FirebasePaths.inventory)
+          .doc('${branchA}_ing_beans')
+          .update({'quantity': 18.0});
+
+      final cartItem = CartItemModel(
+        id: 'concurrent_item',
+        product: prodAmericano,
+        selectedTemperature: 'Hot',
+        unitPrice: 100.0,
+        quantity: 1,
+      );
+
+      int successes = 0;
+      int failures = 0;
+      Object? failureError;
+
+      Future<void> attemptCheckout(String saleId) async {
+        try {
+          await transactionsProvider.addTransaction(
+            branchId: branchA,
+            branchName: 'Santa Cruz',
+            items: [cartItem],
+            totalAmount: 100.0,
+            paymentMethod: 'Cash',
+            clientSaleId: saleId,
+          );
+          successes++;
+        } catch (e) {
+          failures++;
+          failureError = e;
+        }
+      }
+
+      // Note: FakeFirebaseFirestore does not emulate server-side optimistic
+      // concurrency retries across simultaneous coroutines, so execute
+      // back-to-back attempts here to verify transactional re-read & rejection.
+      await attemptCheckout('CONCURRENT_SALE_1');
+      await attemptCheckout('CONCURRENT_SALE_2');
+
+      expect(successes, 1);
+      expect(failures, 1);
+      expect(failureError.toString(), contains('Insufficient branch stock'));
+
+      // Inventory must never go negative (18.0 -> 0.0)
+      final beansAfter = await fakeDb
+          .collection(FirebasePaths.inventory)
+          .doc('${branchA}_ing_beans')
+          .get();
+      expect(beansAfter.data()?['quantity'], 0.0);
+
+      // Only the first sale persisted and only the first sale wrote audit records
+      final salesAfter = await fakeDb.collection(FirebasePaths.sales).get();
+      expect(salesAfter.docs.length, 1);
+      expect(salesAfter.docs.single.id, 'CONCURRENT_SALE_1');
+
+      final failedAuditLogs = await fakeDb
+          .collection(FirebasePaths.inventoryTransactions)
+          .where('saleId', isEqualTo: 'CONCURRENT_SALE_2')
+          .get();
+      expect(failedAuditLogs.docs, isEmpty);
+    });
   });
 }

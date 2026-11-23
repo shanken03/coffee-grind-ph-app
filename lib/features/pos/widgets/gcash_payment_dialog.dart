@@ -135,9 +135,10 @@ class _GcashPaymentDialogState extends State<GcashPaymentDialog> {
 
     return AlertDialog(
       backgroundColor: AppColors.surfaceWhite,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: AppColors.latteBeige, width: 1.2),
+        side: const BorderSide(color: AppColors.borderSubtle, width: 1.0),
       ),
       titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20),
@@ -147,7 +148,7 @@ class _GcashPaymentDialogState extends State<GcashPaymentDialog> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.1),
+              color: Colors.blue.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -193,9 +194,9 @@ class _GcashPaymentDialogState extends State<GcashPaymentDialog> {
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                 decoration: BoxDecoration(
-                  color: AppColors.darkCoffee.withValues(alpha: 0.05),
+                  color: AppColors.warmCream,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.latteBeige),
+                  border: Border.all(color: AppColors.borderSubtle),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -320,11 +321,14 @@ class _GcashPaymentDialogState extends State<GcashPaymentDialog> {
               // Required GCash Reference Number Input
               TextFormField(
                 controller: _refController,
-                keyboardType: TextInputType.text,
+                keyboardType: TextInputType.number,
                 textInputAction: TextInputAction.done,
+                maxLength: 13,
+                maxLengthEnforcement: MaxLengthEnforcement.enforced,
                 onFieldSubmitted: (_) => _confirm(),
                 inputFormatters: [
-                  LengthLimitingTextInputFormatter(30),
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(13),
                 ],
                 style: AppTextStyles.inputField(fontSize: 14),
                 decoration: InputDecoration(
@@ -332,6 +336,10 @@ class _GcashPaymentDialogState extends State<GcashPaymentDialog> {
                   labelStyle: AppTextStyles.formLabel(fontSize: 13),
                   hintText: 'Enter 13-digit reference from customer receipt',
                   hintStyle: AppTextStyles.inputHint(fontSize: 12),
+                  counterStyle: AppTextStyles.caption(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                   prefixIcon: const Icon(
                     Icons.receipt_long_rounded,
                     color: AppColors.darkCoffee,
@@ -364,6 +372,12 @@ class _GcashPaymentDialogState extends State<GcashPaymentDialog> {
                   if (text.isEmpty) {
                     return 'Enter GCash reference number';
                   }
+                  if (!RegExp(r'^\d+$').hasMatch(text)) {
+                    return 'Reference number must contain digits only';
+                  }
+                  if (text.length > 13) {
+                    return 'Reference number cannot exceed 13 digits';
+                  }
                   if (text.length < 4) {
                     return 'Reference number is too short';
                   }
@@ -377,6 +391,9 @@ class _GcashPaymentDialogState extends State<GcashPaymentDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(null),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
           child: Text(
             'Cancel',
             style: AppTextStyles.button(color: AppColors.textSecondary),
@@ -386,10 +403,11 @@ class _GcashPaymentDialogState extends State<GcashPaymentDialog> {
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.darkCoffee,
             foregroundColor: AppColors.surfaceWhite,
+            elevation: 0,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           ),
           onPressed: _confirm,
           child: Text(

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/widgets/app_animations.dart';
 import '../../providers/branch_session_provider.dart';
 import '../../providers/transactions_provider.dart';
 import '../../providers/restock_provider.dart';
@@ -50,16 +51,17 @@ class HomeScreen extends StatelessWidget {
                   // --- HEADER CONTAINER ---
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(22.0),
-                    decoration: const BoxDecoration(
+                    padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
+                    decoration: BoxDecoration(
                       color: AppColors.surfaceWhite,
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(24),
-                        bottomRight: Radius.circular(24),
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(28),
+                        bottomRight: Radius.circular(28),
                       ),
-                      border: Border(
-                        bottom: BorderSide(color: AppColors.latteBeige, width: 1),
+                      border: const Border(
+                        bottom: BorderSide(color: AppColors.borderSubtle, width: 1.2),
                       ),
+                      boxShadow: AppColors.cardShadow,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,62 +69,82 @@ class HomeScreen extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(9),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.darkCoffee.withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: AppColors.latteBeige,
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceWhite,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: AppColors.borderSubtle,
+                                      ),
+                                      boxShadow: AppColors.softShadow,
+                                    ),
+                                    child: Image.asset(
+                                      'assets/images/coffee_grind_logo.png',
+                                      fit: BoxFit.contain,
                                     ),
                                   ),
-                                  child: const Icon(
-                                    Icons.coffee_rounded,
-                                    color: AppColors.darkCoffee,
-                                    size: 22,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'COFFEE GRIND PH',
+                                          style: AppTextStyles.displayTitle(
+                                            fontSize: 16,
+                                            letterSpacing: 1.4,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          '${branchSession.currentBranchName} Branch',
+                                          style: AppTextStyles.caption(
+                                            color: AppColors.textSecondary,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'COFFEE GRIND PH',
-                                      style: AppTextStyles.displayTitle(
-                                        fontSize: 16,
-                                        letterSpacing: 1.2,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${branchSession.currentBranchName} Branch',
-                                      style: AppTextStyles.caption(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             // Logged-in Branch Status Badge
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
-                                color: AppColors.forestGreen.withValues(alpha: 0.12),
+                                color: AppColors.forestGreen.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: AppColors.forestGreen.withValues(alpha: 0.4)),
+                                border: Border.all(color: AppColors.forestGreen.withValues(alpha: 0.25)),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.check_circle_rounded, color: AppColors.forestGreen, size: 12),
-                                  const SizedBox(width: 4),
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.forestGreen,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
                                   Text(
                                     'ONLINE',
                                     style: AppTextStyles.badge(
                                       color: AppColors.forestGreen,
                                       fontSize: 10,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ],
@@ -130,7 +152,7 @@ class HomeScreen extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 22),
                         Text(
                           _getGreeting(branchSession.currentBranchName),
                           style: AppTextStyles.pageTitle(
@@ -156,11 +178,12 @@ class HomeScreen extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
                     child: Container(
-                      padding: const EdgeInsets.all(18),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceWhite,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.latteBeige, width: 1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.borderSubtle, width: 1.2),
+                        boxShadow: AppColors.cardShadow,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,38 +191,59 @@ class HomeScreen extends StatelessWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.flag_rounded, color: AppColors.darkCoffee, size: 20),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Daily Branch Quota',
-                                    style: AppTextStyles.cardTitle(
-                                      fontSize: 15,
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(7),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.darkCoffee.withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(Icons.flag_rounded, color: AppColors.darkCoffee, size: 18),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Daily Branch Quota',
+                                        style: AppTextStyles.cardTitle(
+                                          fontSize: 15,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              Text(
-                                '$progressPct%',
-                                style: AppTextStyles.statNumber(
-                                  fontSize: 14,
-                                  color: AppColors.forestGreen,
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.forestGreen.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '$progressPct%',
+                                  style: AppTextStyles.statNumber(
+                                    fontSize: 14,
+                                    color: AppColors.forestGreen,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: LinearProgressIndicator(
+                            child: AppAnimatedProgressBar(
                               value: progress,
                               minHeight: 10,
-                              backgroundColor: AppColors.warmCream,
-                              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.forestGreen),
+                              backgroundColor: AppColors.containerMuted,
+                              valueColor: AppColors.forestGreen,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -247,29 +291,45 @@ class HomeScreen extends StatelessWidget {
                           mainAxisSpacing: 12,
                           childAspectRatio: overviewAspectRatio,
                           children: [
-                            _buildOverviewCard(
-                              title: "Today's Sales",
-                              value: '₱${todaySales.toStringAsFixed(2)}',
-                              icon: Icons.payments_rounded,
-                              accentColor: AppColors.darkCoffee,
+                            AppFadeSlideScale(
+                              startInterval: 0.05,
+                              beginOffset: const Offset(0, 14),
+                              child: _buildOverviewCard(
+                                title: "Today's Sales",
+                                value: '₱${todaySales.toStringAsFixed(2)}',
+                                icon: Icons.payments_rounded,
+                                accentColor: AppColors.darkCoffee,
+                              ),
                             ),
-                            _buildOverviewCard(
-                              title: 'Transactions',
-                              value: '${txProvider.todayTransactionCount}',
-                              icon: Icons.receipt_long_rounded,
-                              accentColor: AppColors.darkCoffee,
+                            AppFadeSlideScale(
+                              startInterval: 0.12,
+                              beginOffset: const Offset(0, 14),
+                              child: _buildOverviewCard(
+                                title: 'Transactions',
+                                value: '${txProvider.todayTransactionCount}',
+                                icon: Icons.receipt_long_rounded,
+                                accentColor: AppColors.darkCoffee,
+                              ),
                             ),
-                            _buildOverviewCard(
-                              title: 'Pending Restock',
-                              value: '${restockProvider.pendingCount}',
-                              icon: Icons.inventory_rounded,
-                              accentColor: AppColors.amber,
+                            AppFadeSlideScale(
+                              startInterval: 0.19,
+                              beginOffset: const Offset(0, 14),
+                              child: _buildOverviewCard(
+                                title: 'Pending Restock',
+                                value: '${restockProvider.pendingCount}',
+                                icon: Icons.inventory_rounded,
+                                accentColor: AppColors.amber,
+                              ),
                             ),
-                            _buildOverviewCard(
-                              title: 'Notifications',
-                              value: '${notifProvider.unreadCount} Unread',
-                              icon: Icons.notifications_active_rounded,
-                              accentColor: AppColors.forestGreen,
+                            AppFadeSlideScale(
+                              startInterval: 0.26,
+                              beginOffset: const Offset(0, 14),
+                              child: _buildOverviewCard(
+                                title: 'Notifications',
+                                value: '${notifProvider.unreadCount} Unread',
+                                icon: Icons.notifications_active_rounded,
+                                accentColor: AppColors.forestGreen,
+                              ),
                             ),
                           ],
                         ),
@@ -286,14 +346,28 @@ class HomeScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         if (notifProvider.announcements.isEmpty)
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(20.0),
-                              child: Center(
-                                child: Text(
-                                  'No published announcements from the Owner.',
-                                  style: AppTextStyles.body(color: AppColors.textSecondary),
-                                ),
+                          Container(
+                            padding: const EdgeInsets.all(24.0),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceWhite,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.borderSubtle, width: 1.2),
+                              boxShadow: AppColors.cardShadow,
+                            ),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.campaign_outlined,
+                                    size: 32,
+                                    color: AppColors.textMuted.withValues(alpha: 0.5),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'No published announcements from the Owner.',
+                                    style: AppTextStyles.body(color: AppColors.textSecondary, fontSize: 13),
+                                  ),
+                                ],
                               ),
                             ),
                           )
@@ -306,41 +380,58 @@ class HomeScreen extends StatelessWidget {
                               final anc = notifProvider.announcements[index];
                               final dateStr = DateFormat('MMM d, h:mm a').format(anc.createdAt);
 
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 10),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(14.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.campaign_rounded, color: AppColors.caramelAccent, size: 20),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              anc.title,
-                                              style: AppTextStyles.cardTitle(
-                                                fontSize: 14,
-                                              ),
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16.0),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceWhite,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.borderSubtle, width: 1.2),
+                                  boxShadow: AppColors.cardShadow,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.warmBronze.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(Icons.campaign_rounded, color: AppColors.warmBronze, size: 18),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            anc.title,
+                                            style: AppTextStyles.cardTitle(
+                                              fontSize: 14,
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        anc.message,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: AppTextStyles.bodySmall(color: AppColors.textSecondary),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        dateStr,
-                                        style: AppTextStyles.caption(color: AppColors.textMuted, fontSize: 10),
-                                      ),
-                                    ],
-                                  ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      anc.message,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTextStyles.bodySmall(color: AppColors.textSecondary, height: 1.35),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.access_time_rounded, size: 12, color: AppColors.textMuted),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          dateStr,
+                                          style: AppTextStyles.caption(color: AppColors.textMuted, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               );
                             },
@@ -366,11 +457,12 @@ class HomeScreen extends StatelessWidget {
     required Color accentColor,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.latteBeige, width: 1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.borderSubtle, width: 1.2),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -379,14 +471,25 @@ class HomeScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: AppTextStyles.subtitle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.subtitle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
-              Icon(icon, color: accentColor, size: 18),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: accentColor, size: 16),
+              ),
             ],
           ),
           Text(

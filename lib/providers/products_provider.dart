@@ -8,9 +8,12 @@ import '../core/constants/firebase_paths.dart';
 import '../models/product_model.dart';
 import '../models/recipe_model.dart';
 import '../models/branch_product_stock_model.dart';
+import '../models/branch_product_serving_model.dart';
 import 'inventory_provider.dart';
 
 class SellableServingsResult {
+  static const int lowStockThreshold = 5;
+
   final int servings;
   final bool hasRecipe;
   final bool isAvailable;
@@ -30,6 +33,13 @@ class SellableServingsResult {
   });
 
   bool get isOutOfStock => servings <= 0;
+  bool get isLowStock => servings > 0 && servings <= lowStockThreshold;
+
+  String get statusBadgeLabel {
+    if (isOutOfStock) return 'OUT OF STOCK — 0 servings';
+    if (isLowStock) return 'LOW STOCK — $servings servings';
+    return 'AVAILABLE — $servings servings';
+  }
 }
 
 class ProductsProvider extends ChangeNotifier {
@@ -42,17 +52,23 @@ class ProductsProvider extends ChangeNotifier {
 
   StreamSubscription<QuerySnapshot>? _productsSubscription;
   StreamSubscription<QuerySnapshot>? _recipesSubscription;
+  StreamSubscription<QuerySnapshot>? _servingsSubscription;
 
   List<ProductModel> _products = [];
   Map<String, RecipeModel> _recipes = {};
+  Map<String, BranchProductServingModel> _manualServings = {};
   bool _isLoading = true;
   bool _isLoadingRecipes = true;
+  bool _isLoadingServings = true;
   String? _currentBranchId;
 
   List<ProductModel> get products => List.unmodifiable(_products);
   Map<String, RecipeModel> get recipes => Map.unmodifiable(_recipes);
+  Map<String, BranchProductServingModel> get manualServings =>
+      Map.unmodifiable(_manualServings);
   bool get isLoading => _isLoading;
   bool get isLoadingRecipes => _isLoadingRecipes;
+  bool get isLoadingServings => _isLoadingServings;
   bool get hasRecipesLoaded => !_isLoadingRecipes && _recipes.isNotEmpty;
   String? get currentBranchId => _currentBranchId;
 
@@ -88,20 +104,69 @@ class ProductsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  @visibleForTesting
+  void setManualServingsForTesting(
+    Map<String, BranchProductServingModel> testServings,
+  ) {
+    _manualServings = testServings;
+    _isLoadingServings = false;
+    notifyListeners();
+  }
+
+  BranchProductServingModel? getManualServingForProduct(String productId) {
+    if (_manualServings.containsKey(productId)) {
+      return _manualServings[productId];
+    }
+    final cleanPId = productId.trim().toLowerCase();
+    for (final entry in _manualServings.entries) {
+      if (entry.key.trim().toLowerCase() == cleanPId ||
+          entry.value.productId.trim().toLowerCase() == cleanPId) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
+
   List<String> get categories {
     final set = <String>{};
     for (final p in _products) {
-      if (p.displayCategory.isNotEmpty) {
+      if (p.isSupportedCategory && p.displayCategory.isNotEmpty) {
         set.add(p.displayCategory);
       }
     }
     return set.toList();
   }
 
-  RecipeModel? getRecipeForProduct(String productId) {
+  RecipeModel? getRecipeForProduct(
+    String productId, {
+    String? productName,
+    String? recipeId,
+  }) {
     if (_recipes.containsKey(productId)) return _recipes[productId];
+    if (recipeId != null &&
+        recipeId.isNotEmpty &&
+        _recipes.containsKey(recipeId)) {
+      return _recipes[recipeId];
+    }
+    final cleanPId = productId.trim().toLowerCase();
+    final cleanRecId = recipeId?.trim().toLowerCase();
+    final cleanName = productName?.trim().toLowerCase();
+    final recByNameId = cleanName != null && cleanName.isNotEmpty
+        ? 'rec_${cleanName.replaceAll(' ', '_')}'
+        : null;
     for (final r in _recipes.values) {
-      if (r.productId == productId) return r;
+      if (r.productId.trim().toLowerCase() == cleanPId ||
+          r.recipeId.trim().toLowerCase() == cleanPId ||
+          (cleanRecId != null &&
+              cleanRecId.isNotEmpty &&
+              r.recipeId.trim().toLowerCase() == cleanRecId) ||
+          (recByNameId != null &&
+              r.recipeId.trim().toLowerCase() == recByNameId) ||
+          (cleanName != null &&
+              cleanName.isNotEmpty &&
+              r.name.trim().toLowerCase() == cleanName)) {
+        return r;
+      }
     }
     return null;
   }
@@ -120,16 +185,18 @@ class ProductsProvider extends ChangeNotifier {
       );
     }
 
-    final recipe =
-        getRecipeForProduct(product.productId) ??
-        (product.recipeId != null ? _recipes[product.recipeId] : null);
+    final recipe = getRecipeForProduct(
+      product.productId,
+      productName: product.name,
+      recipeId: product.recipeId,
+    );
 
     if (recipe == null) {
       if (_isLoadingRecipes) {
         return const SellableServingsResult(
-          servings: 1,
+          servings: 0,
           hasRecipe: false,
-          isAvailable: true,
+          isAvailable: false,
           errorReason: 'Loading recipe...',
         );
       }
@@ -157,18 +224,9 @@ class ProductsProvider extends ChangeNotifier {
         inventoryItems,
       );
 
-      final maxServings = math.max(hotRes.servings, icedRes.servings);
-      final isAvail = maxServings > 0;
-      final bottleneck = hotRes.servings <= icedRes.servings ? hotRes : icedRes;
-
-      physicalRes = SellableServingsResult(
-        servings: maxServings,
-        hasRecipe: true,
-        isAvailable: isAvail,
-        limitingIngredientName: bottleneck.limitingIngredientName,
-        limitingStock: bottleneck.limitingStock,
-        errorReason: isAvail ? null : bottleneck.errorReason,
-      );
+      // Default dual-temperature display to Iced (the configured initial
+      // temperature), falling back to Hot only when Iced is out of stock.
+      physicalRes = icedRes.servings > 0 ? icedRes : hotRes;
     } else {
       final reqs = recipe.getRequirementsForTemperature(effectiveTemp);
       if (reqs.isEmpty) {
@@ -185,7 +243,37 @@ class ProductsProvider extends ChangeNotifier {
       }
     }
 
-    return physicalRes;
+    // Integrate Web Admin manual servings quota
+    final manualQuota = getManualServingForProduct(product.productId);
+    if (manualQuota == null || !manualQuota.isEnabled) {
+      return physicalRes;
+    }
+
+    final effectiveServings =
+        manualQuota.computeEffectiveServings(physicalRes.servings);
+    final isDepleted = manualQuota.remainingServings <= 0;
+
+    return SellableServingsResult(
+      servings: effectiveServings,
+      hasRecipe: physicalRes.hasRecipe,
+      isAvailable: effectiveServings > 0,
+      limitingIngredientName: isDepleted
+          ? 'Manual Quota'
+          : (manualQuota.remainingServings < physicalRes.servings
+              ? 'Manual Quota'
+              : physicalRes.limitingIngredientName),
+      limitingStock: isDepleted
+          ? 0.0
+          : (manualQuota.remainingServings < physicalRes.servings
+              ? manualQuota.remainingServings.toDouble()
+              : physicalRes.limitingStock),
+      errorReason: effectiveServings == 0
+          ? (isDepleted
+              ? 'Manual quota depleted (0 servings remaining)'
+              : physicalRes.errorReason)
+          : null,
+      hasStockRecord: physicalRes.hasStockRecord,
+    );
   }
 
   SellableServingsResult _calculateForRequirements(
@@ -312,6 +400,47 @@ class ProductsProvider extends ChangeNotifier {
     _currentBranchId = cleanBranchId;
     _listenToProducts(cleanBranchId);
     _listenToRecipes();
+    _listenToServings(cleanBranchId);
+  }
+
+  void _listenToServings(String branchId) {
+    _servingsSubscription?.cancel();
+    _isLoadingServings = true;
+
+    try {
+      final cleanBranchId = branchId.trim();
+      _servingsSubscription = _firestore
+          .collection(FirebasePaths.branchProductServings)
+          .where('branchId', isEqualTo: cleanBranchId)
+          .snapshots()
+          .listen(
+            (snapshot) {
+              final map = <String, BranchProductServingModel>{};
+              for (final doc in snapshot.docs) {
+                try {
+                  final serving = BranchProductServingModel.fromFirestore(
+                    doc.id,
+                    doc.data(),
+                  );
+                  map[serving.productId] = serving;
+                  map[doc.id] = serving;
+                } catch (_) {
+                  // Silently ignore corrupted documents so other valid records load cleanly
+                }
+              }
+              _manualServings = map;
+              _isLoadingServings = false;
+              notifyListeners();
+            },
+            onError: (_) {
+              _isLoadingServings = false;
+              notifyListeners();
+            },
+          );
+    } catch (_) {
+      _isLoadingServings = false;
+      notifyListeners();
+    }
   }
 
   void _listenToRecipes() {
@@ -401,6 +530,7 @@ class ProductsProvider extends ChangeNotifier {
   void dispose() {
     _productsSubscription?.cancel();
     _recipesSubscription?.cancel();
+    _servingsSubscription?.cancel();
     super.dispose();
   }
 }

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../models/branch_product_serving_model.dart';
 import '../models/cart_item_model.dart';
 import '../models/product_model.dart';
 import '../models/recipe_model.dart';
@@ -26,9 +27,28 @@ class CartStockDeficit {
       '$ingredientName (Requires ${requiredAmount.toStringAsFixed(requiredAmount % 1 == 0 ? 0 : 1)} $unit, only ${availableAmount.toStringAsFixed(availableAmount % 1 == 0 ? 0 : 1)} $unit in stock)';
 }
 
+class CartManualQuotaDeficit {
+  final String productId;
+  final String productName;
+  final int requestedQuantity;
+  final int remainingServings;
+
+  const CartManualQuotaDeficit({
+    required this.productId,
+    required this.productName,
+    required this.requestedQuantity,
+    required this.remainingServings,
+  });
+
+  String get summary => remainingServings <= 0
+      ? '$productName is out of stock (0 manual servings remaining)'
+      : '$productName ($requestedQuantity in cart, only $remainingServings manual servings available)';
+}
+
 class CartValidationResult {
   final bool isValid;
   final List<CartStockDeficit> deficits;
+  final List<CartManualQuotaDeficit> manualQuotaDeficits;
   final List<String> missingRecipes;
   final List<String> incompatibleUnits;
   final List<String> missingInventory;
@@ -37,6 +57,7 @@ class CartValidationResult {
   const CartValidationResult({
     required this.isValid,
     this.deficits = const [],
+    this.manualQuotaDeficits = const [],
     this.missingRecipes = const [],
     this.incompatibleUnits = const [],
     this.missingInventory = const [],
@@ -48,8 +69,16 @@ class CartValidationResult {
 
 class PosCartProvider extends ChangeNotifier {
   final List<CartItemModel> _items = [];
+  Map<String, BranchProductServingModel> _manualServings = const {};
 
   List<CartItemModel> get items => List.unmodifiable(_items);
+
+  Map<String, BranchProductServingModel> get manualServings => _manualServings;
+
+  void setManualServings(Map<String, BranchProductServingModel> servings) {
+    _manualServings = servings;
+    notifyListeners();
+  }
 
   int get itemCount => _items.fold(0, (sum, item) => sum + item.quantity);
 
@@ -57,6 +86,129 @@ class PosCartProvider extends ChangeNotifier {
       _items.fold(0.0, (sum, item) => sum + item.subtotal);
 
   bool get isEmpty => _items.isEmpty;
+
+  static String? resolveEffectiveTemperature(
+    ProductModel product,
+    String? selectedTemperature,
+  ) {
+    final trimmed = selectedTemperature?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      return trimmed;
+    }
+    return product.fixedTemperature ?? product.initialTemperature;
+  }
+
+  RecipeModel? _findRecipe(
+    ProductModel product,
+    Map<String, RecipeModel> recipes,
+  ) {
+    final pId = product.productId;
+    if (recipes.containsKey(pId)) return recipes[pId];
+    if (product.recipeId != null &&
+        product.recipeId!.isNotEmpty &&
+        recipes.containsKey(product.recipeId)) {
+      return recipes[product.recipeId];
+    }
+
+    final cleanPId = pId.toLowerCase().trim();
+    final cleanRecId = product.recipeId?.toLowerCase().trim();
+    final cleanName = product.name.toLowerCase().trim();
+    final recByNameId = cleanName.isNotEmpty
+        ? 'rec_${cleanName.replaceAll(' ', '_')}'
+        : null;
+    for (final r in recipes.values) {
+      if (r.productId.toLowerCase().trim() == cleanPId ||
+          r.recipeId.toLowerCase().trim() == cleanPId ||
+          (cleanRecId != null &&
+              cleanRecId.isNotEmpty &&
+              r.recipeId.toLowerCase().trim() == cleanRecId) ||
+          (recByNameId != null &&
+              r.recipeId.toLowerCase().trim() == recByNameId) ||
+          (cleanName.isNotEmpty && r.name.toLowerCase().trim() == cleanName)) {
+        return r;
+      }
+    }
+    return null;
+  }
+
+  int _findInventoryIndex(
+    RecipeIngredientRequirement req,
+    List<InventoryItemModel> inventoryItems,
+  ) {
+    final cleanReq = req.ingredientId.trim().toLowerCase();
+    for (int i = 0; i < inventoryItems.length; i++) {
+      final item = inventoryItems[i];
+      if (item.ingredientId.toLowerCase() == cleanReq ||
+          item.id.toLowerCase() == cleanReq ||
+          item.id.toLowerCase().endsWith('_$cleanReq')) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /// Returns a view of [inventoryItems] with [availableQuantity] reduced by
+  /// ingredients already reserved in the current cart.
+  List<InventoryItemModel> getRemainingInventory({
+    required List<InventoryItemModel> inventoryItems,
+    required Map<String, RecipeModel> recipes,
+    String? excludeCartItemId,
+  }) {
+    if (_items.isEmpty || recipes.isEmpty || inventoryItems.isEmpty) {
+      return inventoryItems;
+    }
+
+    final Map<int, double> reservedByIndex = {};
+
+    for (final cartItem in _items) {
+      if (excludeCartItemId != null && cartItem.id == excludeCartItemId) {
+        continue;
+      }
+      final recipe = _findRecipe(cartItem.product, recipes);
+      if (recipe == null || recipe.ingredients.isEmpty) continue;
+
+      final effectiveTemp = resolveEffectiveTemperature(
+        cartItem.product,
+        cartItem.selectedTemperature,
+      );
+      final reqs = recipe.getRequirementsForTemperature(effectiveTemp);
+
+      for (final req in reqs) {
+        if (req.quantity <= 0) continue;
+        final idx = _findInventoryIndex(req, inventoryItems);
+        if (idx < 0) continue;
+
+        final invItem = inventoryItems[idx];
+        final converted = UnitConverter.convert(
+          quantity: req.quantity,
+          fromUnit: req.unit,
+          toUnit: invItem.unit,
+        );
+        final perServing = converted ?? req.quantity;
+        reservedByIndex[idx] =
+            (reservedByIndex[idx] ?? 0.0) + (perServing * cartItem.quantity);
+      }
+    }
+
+    if (reservedByIndex.isEmpty) return inventoryItems;
+
+    return List<InventoryItemModel>.generate(inventoryItems.length, (i) {
+      final inv = inventoryItems[i];
+      final reserved = reservedByIndex[i] ?? 0.0;
+      if (reserved <= 0) return inv;
+      final remaining = math.max(0.0, inv.availableQuantity - reserved);
+      return InventoryItemModel(
+        id: inv.id,
+        ingredientId: inv.ingredientId,
+        name: inv.name,
+        category: inv.category,
+        availableQuantity: remaining,
+        unit: inv.unit,
+        minStock: inv.minStock,
+        branchId: inv.branchId,
+      );
+    });
+  }
 
   void addToCart({
     required ProductModel product,
@@ -69,7 +221,10 @@ class PosCartProvider extends ChangeNotifier {
       return;
     }
 
-    final effectiveTemp = selectedTemperature ?? product.fixedTemperature;
+    final effectiveTemp = resolveEffectiveTemperature(
+      product,
+      selectedTemperature,
+    );
 
     // Generate unique ID for variant combination
     final variantKey =
@@ -124,15 +279,67 @@ class PosCartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Aggregates all cart items and validates cumulative stock against branch ingredient and packaging inventory.
+  /// Aggregates all cart items and validates cumulative stock against branch ingredient and packaging inventory,
+  /// as well as any branch-specific manual product servings quotas.
   CartValidationResult validateCartStock({
     required Map<String, RecipeModel> recipes,
     required List<InventoryItemModel> inventoryItems,
+    Map<String, BranchProductServingModel>? manualServings,
     bool allowMissingRecipes = false,
   }) {
     if (_items.isEmpty) return CartValidationResult.valid;
-    if (recipes.isEmpty && inventoryItems.isEmpty) {
+    final effectiveManualServings = manualServings ?? _manualServings;
+    if (recipes.isEmpty &&
+        inventoryItems.isEmpty &&
+        effectiveManualServings.isEmpty) {
       return CartValidationResult.valid;
+    }
+
+    // 1. Manual product servings quota validation
+    // Aggregate all cart quantities by productId, regardless of variant.
+    final Map<String, int> productCartQuantities = {};
+    final Map<String, String> productNames = {};
+    for (final item in _items) {
+      final pId = item.product.productId;
+      productCartQuantities[pId] =
+          (productCartQuantities[pId] ?? 0) + item.quantity;
+      productNames[pId] = item.product.name;
+    }
+
+    final List<CartManualQuotaDeficit> manualQuotaDeficits = [];
+    if (effectiveManualServings.isNotEmpty) {
+      for (final entry in productCartQuantities.entries) {
+        final pId = entry.key;
+        final requested = entry.value;
+
+        // Lookup quota by exact productId or composite key ending in _$productId
+        BranchProductServingModel? quota = effectiveManualServings[pId];
+        if (quota == null) {
+          for (final qEntry in effectiveManualServings.entries) {
+            if (qEntry.key.endsWith('_$pId') || qEntry.value.productId == pId) {
+              quota = qEntry.value;
+              break;
+            }
+          }
+        }
+
+        // Missing quota document: preserve existing physical inventory validation.
+        // Disabled quota: preserve existing physical inventory validation.
+        // Enabled quota: total cart quantity must not exceed remainingServings.
+        // Enabled quota with zero remaining: reject any positive cart quantity.
+        if (quota != null && quota.isEnabled) {
+          if (requested > quota.remainingServings) {
+            manualQuotaDeficits.add(
+              CartManualQuotaDeficit(
+                productId: pId,
+                productName: productNames[pId] ?? quota.productId,
+                requestedQuantity: requested,
+                remainingServings: quota.remainingServings,
+              ),
+            );
+          }
+        }
+      }
     }
 
     final Map<String, double> aggregatedDemand = {};
@@ -143,25 +350,7 @@ class PosCartProvider extends ChangeNotifier {
     final List<String> missingInventory = [];
 
     for (final cartItem in _items) {
-      final pId = cartItem.product.productId;
-      RecipeModel? recipe =
-          recipes[pId] ??
-          (cartItem.product.recipeId != null
-              ? recipes[cartItem.product.recipeId]
-              : null);
-
-      if (recipe == null) {
-        final cleanPId = pId.toLowerCase().trim();
-        for (final r in recipes.values) {
-          if (r.productId.toLowerCase().trim() == cleanPId ||
-              r.recipeId.toLowerCase().trim() == cleanPId ||
-              r.name.toLowerCase().trim() ==
-                  cartItem.product.name.toLowerCase().trim()) {
-            recipe = r;
-            break;
-          }
-        }
-      }
+      final recipe = _findRecipe(cartItem.product, recipes);
 
       if (recipe == null) {
         if (!allowMissingRecipes) {
@@ -170,8 +359,10 @@ class PosCartProvider extends ChangeNotifier {
         continue;
       }
 
-      final effectiveTemp =
-          cartItem.selectedTemperature ?? cartItem.product.fixedTemperature;
+      final effectiveTemp = resolveEffectiveTemperature(
+        cartItem.product,
+        cartItem.selectedTemperature,
+      );
       final reqs = recipe.getRequirementsForTemperature(effectiveTemp);
       if (reqs.isEmpty) {
         if (!allowMissingRecipes) {
@@ -186,15 +377,8 @@ class PosCartProvider extends ChangeNotifier {
         if (req.quantity <= 0) continue;
 
         final cleanReq = req.ingredientId.trim().toLowerCase();
-        InventoryItemModel? invItem;
-        for (final item in inventoryItems) {
-          if (item.ingredientId.toLowerCase() == cleanReq ||
-              item.id.toLowerCase() == cleanReq ||
-              item.id.toLowerCase().endsWith('_$cleanReq')) {
-            invItem = item;
-            break;
-          }
-        }
+        final idx = _findInventoryIndex(req, inventoryItems);
+        final invItem = idx >= 0 ? inventoryItems[idx] : null;
 
         if (invItem == null) {
           missingInventory.add(
@@ -259,6 +443,7 @@ class PosCartProvider extends ChangeNotifier {
 
     final hasErrors =
         deficits.isNotEmpty ||
+        manualQuotaDeficits.isNotEmpty ||
         missingRecipes.isNotEmpty ||
         incompatibleUnits.isNotEmpty ||
         missingInventory.isNotEmpty;
@@ -268,6 +453,11 @@ class PosCartProvider extends ChangeNotifier {
     }
 
     final errorLines = <String>[];
+    if (manualQuotaDeficits.isNotEmpty) {
+      errorLines.add(
+        'Manual servings limit exceeded:\n• ${manualQuotaDeficits.map((d) => d.summary).join('\n• ')}',
+      );
+    }
     if (deficits.isNotEmpty) {
       errorLines.add(
         'Insufficient branch inventory:\n• ${deficits.map((d) => d.summary).join('\n• ')}',
@@ -292,6 +482,7 @@ class PosCartProvider extends ChangeNotifier {
     return CartValidationResult(
       isValid: false,
       deficits: deficits,
+      manualQuotaDeficits: manualQuotaDeficits,
       missingRecipes: missingRecipes,
       incompatibleUnits: incompatibleUnits,
       missingInventory: missingInventory,

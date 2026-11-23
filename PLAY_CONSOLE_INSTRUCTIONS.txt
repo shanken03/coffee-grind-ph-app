@@ -1,0 +1,202 @@
+================================================================================
+ COFFEE GRIND PH — GOOGLE PLAY CONSOLE & APP RELEASE DEPLOYMENT GUIDE
+================================================================================
+Project: Coffee Grind PH (Mobile Staff POS)
+Firebase Backend: coffee-grind-ph-dce9c (Firebase Spark Plan)
+Generated Date: November 2026
+
+--------------------------------------------------------------------------------
+1. PROJECT SPECIFICATIONS & METADATA
+--------------------------------------------------------------------------------
+- App Name: Coffee Grind PH - Mobile POS
+- Internal Package Name: com.example.coffee_grind_ph
+  * NOTE ON PACKAGE NAME:
+    Google Play Console strictly requires a custom, non-"com.example" package
+    name for public store publishing (e.g., ph.coffeegrind.pos or
+    com.coffeegrindph.pos). If uploading to an Internal App Sharing track for
+    testing, the current package name may be accepted. If Google Play rejects
+    the package name during app creation, see SECTION 9 below for the quick
+    rename steps.
+- Current Version: 1.0.0 (Version Code: 1)
+- Target Platforms: Android (minSdk: 21+, targetSdk: 34+)
+- Bundle Output Location:
+  build/app/outputs/bundle/release/app-release.aab
+
+--------------------------------------------------------------------------------
+2. GOOGLE PLAY CONSOLE: INITIAL APP CREATION
+--------------------------------------------------------------------------------
+Step 1: Log in to Google Play Console (https://play.google.com/console).
+Step 2: On the 'All apps' dashboard, click [Create app].
+Step 3: Fill in the basic app details:
+  - App name: Coffee Grind PH - Mobile POS
+  - Default language: English (United States) [en-US]
+  - App or game: App
+  - Free or paid: Free
+Step 4: Check the declarations for Developer Program Policies and US export laws.
+Step 5: Click [Create app].
+
+--------------------------------------------------------------------------------
+3. STORE PRESENCE (LISTING TEXT)
+--------------------------------------------------------------------------------
+Copy and paste the following texts into 'Store presence' -> 'Main store listing':
+
+[App Name] (Max 30 characters):
+Coffee Grind PH - Mobile POS
+
+[Short Description] (Max 80 characters):
+Fast, reliable Point of Sale & live inventory management for Coffee Grind PH.
+
+[Full Description] (Max 4000 characters):
+Coffee Grind PH Mobile POS is the dedicated, high-performance point of sale and inventory management application designed specifically for Coffee Grind PH cafe staff and baristas across Santa Cruz, LSPU, and expanding branches.
+
+Engineered for fast-paced cafe operations, Coffee Grind PH streamlines customer order taking, product serving quotas, physical stock deduction, and staff communications—both online and offline.
+
+KEY FEATURES:
+
+☕ Fast & Intuitive Point of Sale:
+- Browse coffee, tea, non-coffee, and pastry menu items with instant search and category filters.
+- Support for Hot and Iced drink variations with automatic price adjustments.
+- Real-time cart calculations, subtotaling, custom cash tender, and exact change calculation.
+- Integrated GCash payment verification dialog with reference number entry and QR display.
+
+📦 Live Inventory & Recipe Deduction:
+- Real-time stock synchronisation with Cloud Firestore.
+- Automatic multi-ingredient deduction per beverage sold (coffee beans, milk, syrups, cups, lids, and straws).
+- Prevents out-of-stock ordering with instant inventory availability validation.
+
+🎯 Manual Product Servings Quota:
+- Enforces branch-specific daily beverage quota controls.
+- Tracks real-time serving balances and logs atomic quota ledger transactions.
+
+⚡ Offline Order Queue & Auto-Sync:
+- Keep selling seamlessly even during internet or network outages.
+- Orders queue locally with full data persistence.
+- Automatic background synchronisation upon network restoration with overdraft quota safeguards and atomic database batching.
+
+📋 Restock Request Management:
+- Staff can submit inventory replenishment requests directly from the branch POS.
+- Real-time tracking of pending, approved, and fulfilled restock orders.
+
+📢 Staff Announcements & Notifications:
+- Instant broadcast messages and company announcements for branch personnel.
+- Interactive swipe actions: swipe right to mark as read, swipe left to dismiss.
+
+🔒 Multi-Branch Security:
+- Branch-scoped session authorization (Santa Cruz, LSPU).
+- Strict role isolation protecting cross-branch inventory and sales records.
+
+--------------------------------------------------------------------------------
+4. GRAPHIC ASSETS & BRANDING
+--------------------------------------------------------------------------------
+Upload the following generated assets to 'Store presence' -> 'Main store listing':
+
+1. App Icon (Required):
+   - Path: assets/branding/playstore_icon_512.png
+   - Format: 512 x 512 px, PNG (32-bit), max 1 MB.
+
+2. Feature Graphic (Required):
+   - Path: assets/branding/playstore_feature_graphic_1024x500.png
+   - Format: 1024 x 500 px, PNG or JPEG, max 15 MB.
+
+3. Phone Screenshots:
+   - Provide 2 to 8 screenshots of the running app (16:9 or 18:9 aspect ratio,
+     e.g., 1080x1920 or 1080x2400).
+   - Recommended screens to capture:
+     a. Menu / POS Screen showing beverage cards and categories.
+     b. Cart & Checkout screen showing cash / GCash options.
+     c. Restocking & Inventory status screen.
+     d. Announcements & Notifications screen.
+     e. Branch login / selection screen.
+
+--------------------------------------------------------------------------------
+5. APP CONTENT & DECLARATIONS
+--------------------------------------------------------------------------------
+Complete each questionnaire under 'App content' in Google Play Console:
+
+1. Privacy Policy:
+   - Provide the URL where your branch privacy policy is hosted (e.g. Firebase
+     Hosting page or public repository privacy markdown).
+
+2. App Access:
+   - Select: "All or some functionality in my app is restricted" (requires branch login).
+   - Provide test login credentials for Google app reviewers:
+     * Instructions: "Staff POS terminal application. Select a branch and log in using branch credentials to access the POS."
+     * Branch: LSPU Branch or Santa Cruz Branch
+     * Email / Username: (provide branch test user from Firebase Authentication)
+     * Password: (provide branch test password)
+
+3. Ads:
+   - Select: "No, my app does not contain ads".
+
+4. Content Rating:
+   - Category: Utility / Productivity / Commercial.
+   - Violence, sex, offensive language: None / No.
+   - Rating outcome: Everyone / All ages.
+
+5. Target Audience & Content:
+   - Target age groups: 18 and over (Internal enterprise/staff POS).
+   - Could your app unintentionally appeal to children: No.
+
+6. Data Safety:
+   - Data collected:
+     * User IDs / Branch Account Info (for authentication and security).
+     * Financial info / Purchase history (for POS sales receipts).
+   - Data encrypted in transit: Yes (HTTPS / TLS via Firebase SDK).
+   - Can users request data deletion: Yes (via store owner/admin).
+
+--------------------------------------------------------------------------------
+6. APP RELEASES & BUNDLE UPLOAD
+--------------------------------------------------------------------------------
+Step 1: Go to 'Release' -> 'Testing' -> 'Internal testing' (recommended for first test).
+Step 2: Click [Create new release].
+Step 3: App signing: Select 'Use Google-generated key' (Play App Signing).
+Step 4: Upload the App Bundle:
+        Drag and drop:
+        build/app/outputs/bundle/release/app-release.aab
+Step 5: Release name: 1.0.0 (1)
+Step 6: Release notes:
+        "Initial release of Coffee Grind PH Mobile Staff POS with offline sync,
+         inventory recipe deduction, and daily serving quota controls."
+Step 7: Click [Save] and [Review release], then roll out to internal testers.
+
+--------------------------------------------------------------------------------
+7. FIREBASE AUTH & FIRESTORE ALIGNMENT CHECKLIST
+--------------------------------------------------------------------------------
+Before distributing to branch staff:
+1. Verify SHA-1 & SHA-256 in Firebase Console:
+   - In Google Play Console -> Setup -> App integrity -> App signing.
+   - Copy the 'SHA-1 certificate fingerprint' and 'SHA-256 certificate fingerprint'
+     from the 'App signing key certificate'.
+   - Go to Firebase Console (https://console.firebase.google.com/) ->
+     Project Settings -> Your apps -> Android app (coffee_grind_ph) ->
+     Add fingerprint.
+   - Paste both SHA-1 and SHA-256. This ensures Firebase Authentication and
+     Google Play App Signing work without rejection.
+
+2. Verify Firestore Security Rules:
+   - Ensure the unified ruleset with Section 10 quota and RFID rules remains
+     active in coffee-grind-ph-dce9c.
+
+--------------------------------------------------------------------------------
+8. PRODUCTION ROLLOUT
+--------------------------------------------------------------------------------
+Once internal testing confirms all checkout, receipt printing/dialog, and
+offline synchronization behaviors work on real branch devices:
+1. Go to 'Release' -> 'Production'.
+2. Click [Create new release].
+3. Select 'Add from library' and pick the verified 1.0.0 bundle.
+4. Review release and submit for Google Play Review.
+
+--------------------------------------------------------------------------------
+9. OPTIONAL: PACKAGE NAME CHANGE (IF GOOGLE PLAY REJECTS 'com.example')
+--------------------------------------------------------------------------------
+If Google Play Console shows "You must use a different package name because
+'com.example' is restricted":
+1. Choose your new package name, e.g.: ph.coffeegrind.pos
+2. Update android/app/build.gradle.kts:
+   - namespace = "ph.coffeegrind.pos"
+   - applicationId = "ph.coffeegrind.pos"
+3. In Firebase Console, add the new Android App package name 'ph.coffeegrind.pos'.
+4. Download the updated 'google-services.json' and place it in 'android/app/'.
+5. Run: flutter build appbundle --release
+================================================================================

@@ -15,6 +15,11 @@ class NotificationProvider extends ChangeNotifier {
   Timer? _expirationTimer;
 
   List<NotificationModel> _notifications = [];
+  final Set<String> _readIds = {};
+  final Set<String> _dismissedIds = {};
+  final Set<String> _readAnnouncementIds = {};
+  final Set<String> _dismissedAnnouncementIds = {};
+
   List<AnnouncementModel> _rawAnnouncements = [];
   bool _isLoading = true;
   String? _currentBranchId;
@@ -27,12 +32,12 @@ class NotificationProvider extends ChangeNotifier {
   List<NotificationModel> get notifications =>
       List.unmodifiable(_notifications);
 
-  /// Dynamically excludes expired, draft, archived, and solved announcements so
-  /// that active announcements update automatically while the app remains open
-  /// and after reload.
+  /// Dynamically excludes expired, draft, archived, solved, and dismissed announcements
+  /// and applies read state.
   List<AnnouncementModel> get announcements {
     final now = DateTime.now();
     return _rawAnnouncements.where((a) {
+      if (_dismissedAnnouncementIds.contains(a.id)) return false;
       final st = a.status.toLowerCase().trim();
       if (st == 'draft' ||
           st == 'archived' ||
@@ -42,6 +47,9 @@ class NotificationProvider extends ChangeNotifier {
       }
       if (a.expirationDate == null) return true;
       return a.expirationDate!.isAfter(now);
+    }).map((a) {
+      final isRead = _readAnnouncementIds.contains(a.id);
+      return a.copyWith(isRead: isRead);
     }).toList();
   }
 
@@ -56,8 +64,24 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   @visibleForTesting
+  void setNotificationsForTesting(List<NotificationModel> testNotifications) {
+    _notifications = testNotifications
+        .where((n) => !_dismissedIds.contains(n.id))
+        .map((n) {
+          if (_readIds.contains(n.id)) n.isRead = true;
+          return n;
+        })
+        .toList();
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  @visibleForTesting
   void setAnnouncementsForTesting(List<AnnouncementModel> testAnnouncements) {
-    _rawAnnouncements = testAnnouncements;
+    _rawAnnouncements = testAnnouncements
+        .where((a) => !_dismissedAnnouncementIds.contains(a.id))
+        .map((a) => a.copyWith(isRead: _readAnnouncementIds.contains(a.id)))
+        .toList();
     notifyListeners();
   }
 
@@ -94,7 +118,9 @@ class NotificationProvider extends ChangeNotifier {
           .snapshots()
           .listen(
             (snapshot) {
-              final loaded = snapshot.docs.map((doc) {
+              final loaded = snapshot.docs
+                  .where((doc) => !_dismissedIds.contains(doc.id))
+                  .map((doc) {
                 final data = doc.data();
                 DateTime ts = DateTime.now();
                 if (data['timestamp'] is Timestamp) {
@@ -103,13 +129,16 @@ class NotificationProvider extends ChangeNotifier {
                   ts = (data['createdAt'] as Timestamp).toDate();
                 }
 
+                final isRead = (data['isRead'] as bool? ?? false) ||
+                    _readIds.contains(doc.id);
+
                 return NotificationModel(
                   id: doc.id,
                   title: data['title'] as String? ?? 'Notification',
                   message: data['message'] as String? ?? '',
                   type: _parseType(data['type'] as String?),
                   timestamp: ts,
-                  isRead: data['isRead'] as bool? ?? false,
+                  isRead: isRead,
                 );
               }).toList()..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
@@ -407,6 +436,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   void markAsRead(String id) {
+    _readIds.add(id);
     final index = _notifications.indexWhere((n) => n.id == id);
     if (index >= 0 && !_notifications[index].isRead) {
       _notifications[index].isRead = true;
@@ -416,8 +446,75 @@ class NotificationProvider extends ChangeNotifier {
 
   void markAllAsRead() {
     for (var n in _notifications) {
+      _readIds.add(n.id);
       n.isRead = true;
     }
+    notifyListeners();
+  }
+
+  void removeNotification(String id) {
+    _dismissedIds.add(id);
+    final beforeLen = _notifications.length;
+    _notifications.removeWhere((n) => n.id == id);
+    if (_notifications.length != beforeLen) {
+      notifyListeners();
+    }
+  }
+
+  void clearAllNotifications() {
+    if (_notifications.isEmpty) return;
+    for (final n in _notifications) {
+      _dismissedIds.add(n.id);
+    }
+    _notifications.clear();
+    notifyListeners();
+  }
+
+  void markAnnouncementAsRead(String id) {
+    _readAnnouncementIds.add(id);
+    notifyListeners();
+  }
+
+  void markAllAnnouncementsAsRead() {
+    for (final a in _rawAnnouncements) {
+      _readAnnouncementIds.add(a.id);
+    }
+    notifyListeners();
+  }
+
+  void removeAnnouncement(String id) {
+    _dismissedAnnouncementIds.add(id);
+    _announcementsMap.remove(id);
+    _rawAnnouncements.removeWhere((a) => a.id == id);
+    notifyListeners();
+  }
+
+  void clearAllAnnouncements() {
+    if (_rawAnnouncements.isEmpty) return;
+    for (final a in _rawAnnouncements) {
+      _dismissedAnnouncementIds.add(a.id);
+    }
+    _announcementsMap.clear();
+    _rawAnnouncements.clear();
+    notifyListeners();
+  }
+
+  /// Manually triggers a local notification (also dispatches to system status bar)
+  void triggerLocalInAppNotification({
+    required String title,
+    required String message,
+    NotificationType type = NotificationType.system,
+  }) {
+    final notif = NotificationModel(
+      id: 'local_${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      message: message,
+      type: type,
+      timestamp: DateTime.now(),
+      isRead: false,
+    );
+    _notifications.insert(0, notif);
+    _isLoading = false;
     notifyListeners();
   }
 

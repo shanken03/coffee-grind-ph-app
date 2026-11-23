@@ -1105,8 +1105,9 @@ void main() {
         ),
       );
 
-      // Verify no misleading estimated stock count is displayed
+      // Verify exact computed low-stock servings badge is displayed
       expect(find.textContaining('left'), findsNothing);
+      expect(find.text('LOW STOCK — 5 servings'), findsOneWidget);
       expect(find.text('Add'), findsOneWidget);
       expect(find.text('Latte Test 5'), findsOneWidget);
       expect(find.text('₱100'), findsOneWidget);
@@ -1181,8 +1182,9 @@ void main() {
           ),
         );
 
-        // Verify no misleading estimated count is displayed
+        // Verify exact computed available servings badge is displayed (not capped at 50)
         expect(find.textContaining('left'), findsNothing);
+        expect(find.text('AVAILABLE — 100 servings'), findsOneWidget);
         expect(find.text('Add'), findsOneWidget);
         expect(find.text('Latte High Stock'), findsOneWidget);
         expect(find.text('₱100'), findsOneWidget);
@@ -1251,9 +1253,9 @@ void main() {
         ),
       );
 
-      // Verify no misleading 'in stock' count is displayed, but Available chip is shown
+      // Verify exact computed servings chip is displayed
       expect(find.textContaining('in stock'), findsNothing);
-      expect(find.text('Available'), findsOneWidget);
+      expect(find.text('LOW STOCK — 2 servings'), findsOneWidget);
       expect(find.text('1'), findsOneWidget);
 
       // Increment to 2
@@ -1453,6 +1455,649 @@ void main() {
           find.widgetWithIcon(IconButton, Icons.add_circle_outline),
         );
         expect(reEnabledButton.onPressed, isNotNull);
+      },
+    );
+  });
+
+  group('Phase 2 Dual-Temperature Fallback & Shared-Ingredient Cart Stock Tests', () {
+    test('Dual-temperature fallback defaults to Iced and never returns Hot + Iced packaging together', () {
+      const dualRecipe = RecipeModel(
+        recipeId: 'rec_americano_dual',
+        productId: 'prod_americano_dual',
+        name: 'Americano',
+        ingredients: [
+          RecipeIngredientRequirement(
+            ingredientId: 'beans',
+            ingredientName: 'Espresso Beans',
+            quantity: 18,
+            unit: 'g',
+            temperature: 'both',
+          ),
+          RecipeIngredientRequirement(
+            ingredientId: 'cup_hot_8oz',
+            ingredientName: '8oz Hot Cup',
+            quantity: 1,
+            unit: 'pcs',
+            temperature: 'hot',
+            itemType: 'packaging',
+          ),
+          RecipeIngredientRequirement(
+            ingredientId: 'cup_iced_890ml',
+            ingredientName: '890ml Iced Cup',
+            quantity: 1,
+            unit: 'pcs',
+            temperature: 'iced',
+            itemType: 'packaging',
+          ),
+        ],
+      );
+
+      // Even if null is passed directly, dual-temp recipe selects Iced only.
+      final nullReqs = dualRecipe.getRequirementsForTemperature(null);
+      expect(nullReqs.map((r) => r.ingredientId).toSet(), {'beans', 'cup_iced_890ml'});
+      expect(nullReqs.any((r) => r.temperature == 'hot'), isFalse);
+
+      // Explicit Hot returns Hot packaging only.
+      final hotReqs = dualRecipe.getRequirementsForTemperature('Hot');
+      expect(hotReqs.map((r) => r.ingredientId).toSet(), {'beans', 'cup_hot_8oz'});
+
+      // Cart addition without explicit selectedTemperature falls back to initialTemperature ('Iced').
+      final dualProduct = ProductModel(
+        productId: 'prod_americano_dual',
+        name: 'Americano',
+        category: ProductCategory.coffee,
+        description: '',
+        imageUrl: '',
+        isAvailable: true,
+        availableBranches: const ['all'],
+        pricing: const ProductPricing(hotPrice: 90, icedPrice: 110),
+        recipeId: 'rec_americano_dual',
+      );
+      expect(dualProduct.initialTemperature, 'Iced');
+
+      final cart = PosCartProvider();
+      cart.addToCart(
+        product: dualProduct,
+        selectedTemperature: null,
+        unitPrice: 110,
+        quantity: 1,
+      );
+      expect(cart.items.single.selectedTemperature, 'Iced');
+    });
+
+    test('Missing recipe or missing inventory fails safely (0 servings, never unlimited)', () {
+      final productsProvider = ProductsProvider();
+      productsProvider.setRecipesForTesting({});
+
+      final prod = ProductModel(
+        productId: 'prod_no_recipe',
+        name: 'Mystery Drink',
+        category: ProductCategory.coffee,
+        description: '',
+        imageUrl: '',
+        isAvailable: true,
+        availableBranches: const ['all'],
+        pricing: const ProductPricing(hotPrice: 100),
+      );
+
+      final missingRecipeRes = productsProvider.calculateSellableServings(
+        product: prod,
+        inventoryItems: const [
+          InventoryItemModel(
+            id: 'br_beans',
+            ingredientId: 'beans',
+            name: 'Beans',
+            category: 'Ingredient',
+            availableQuantity: 1000,
+            unit: 'g',
+            minStock: 10,
+            branchId: 'br_sc',
+          ),
+        ],
+      );
+      expect(missingRecipeRes.isOutOfStock, isTrue);
+      expect(missingRecipeRes.servings, 0);
+
+      // Web-Admin style recipe ID matching (rec_<normalized_name>)
+      productsProvider.setRecipesForTesting({
+        'rec_mystery_drink': const RecipeModel(
+          recipeId: 'rec_mystery_drink',
+          productId: 'different_id',
+          name: 'Mystery Drink',
+          ingredients: [
+            RecipeIngredientRequirement(
+              ingredientId: 'missing_syrup',
+              ingredientName: 'Secret Syrup',
+              quantity: 20,
+              unit: 'ml',
+            ),
+          ],
+        ),
+      });
+
+      final missingInvRes = productsProvider.calculateSellableServings(
+        product: prod,
+        inventoryItems: const [],
+      );
+      expect(missingInvRes.hasRecipe, isTrue);
+      expect(missingInvRes.isOutOfStock, isTrue);
+      expect(missingInvRes.servings, 0);
+    });
+
+    testWidgets('Multiple cart items sharing beans update ProductCard and cap CartScreen stepper', (tester) async {
+      final productsProvider = ProductsProvider();
+      final inventoryProvider = InventoryProvider();
+      final cartProvider = PosCartProvider();
+
+      final espresso = ProductModel(
+        productId: 'prod_espresso',
+        name: 'Espresso',
+        category: ProductCategory.coffee,
+        description: '',
+        imageUrl: '',
+        isAvailable: true,
+        availableBranches: const ['all'],
+        pricing: const ProductPricing(hotPrice: 80),
+        recipeId: 'rec_espresso',
+      );
+      final americano = ProductModel(
+        productId: 'prod_americano',
+        name: 'Americano',
+        category: ProductCategory.coffee,
+        description: '',
+        imageUrl: '',
+        isAvailable: true,
+        availableBranches: const ['all'],
+        pricing: const ProductPricing(hotPrice: 100),
+        recipeId: 'rec_americano',
+      );
+
+      productsProvider.setRecipesForTesting({
+        'rec_espresso': const RecipeModel(
+          recipeId: 'rec_espresso',
+          productId: 'prod_espresso',
+          name: 'Espresso',
+          ingredients: [
+            RecipeIngredientRequirement(ingredientId: 'beans', quantity: 18, unit: 'g'),
+          ],
+        ),
+        'rec_americano': const RecipeModel(
+          recipeId: 'rec_americano',
+          productId: 'prod_americano',
+          name: 'Americano',
+          ingredients: [
+            RecipeIngredientRequirement(ingredientId: 'beans', quantity: 18, unit: 'g'),
+          ],
+        ),
+      });
+      productsProvider.setProductsForTesting([espresso, americano]);
+
+      // 36g beans = 2 total shots across both drinks
+      inventoryProvider.setItemsForTesting(const [
+        InventoryItemModel(
+          id: 'br_beans',
+          ingredientId: 'beans',
+          name: 'Coffee Beans',
+          category: 'Ingredient',
+          availableQuantity: 36,
+          unit: 'g',
+          minStock: 10,
+          branchId: 'br_sc',
+        ),
+      ]);
+
+      // Put 1 Espresso and 1 Americano into cart (consuming all 36g beans)
+      cartProvider.addToCart(
+        product: espresso,
+        selectedTemperature: 'Hot',
+        unitPrice: 80,
+        quantity: 1,
+      );
+      cartProvider.addToCart(
+        product: americano,
+        selectedTemperature: 'Hot',
+        unitPrice: 100,
+        quantity: 1,
+      );
+
+      // Verify remaining inventory helper reduces beans to 0
+      final remaining = cartProvider.getRemainingInventory(
+        inventoryItems: inventoryProvider.items,
+        recipes: productsProvider.recipes,
+      );
+      expect(remaining.single.availableQuantity, 0.0);
+
+      // ProductCard for Americano now reflects OUT OF STOCK once all beans are in cart
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: productsProvider),
+            ChangeNotifierProvider.value(value: inventoryProvider),
+            ChangeNotifierProvider.value(value: cartProvider),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 220,
+                height: 320,
+                child: ProductCard(
+                  product: americano,
+                  onTap: () {},
+                  onAdd: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('OUT OF STOCK'), findsOneWidget);
+
+      // CartScreen disables both items' '+' steppers because shared 36g beans are exhausted
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: productsProvider),
+            ChangeNotifierProvider.value(value: inventoryProvider),
+            ChangeNotifierProvider.value(value: cartProvider),
+          ],
+          child: const MaterialApp(home: CartScreen()),
+        ),
+      );
+
+      final plusButtons = tester
+          .widgetList<IconButton>(
+            find.widgetWithIcon(IconButton, Icons.add_circle_outline),
+          )
+          .toList();
+      expect(plusButtons.length, 2);
+      expect(plusButtons.every((b) => b.onPressed == null), isTrue);
+    });
+  });
+
+  group('Phase 2B Exact Available Servings UI Tests', () {
+    testWidgets(
+      'ProductCard displays AVAILABLE, LOW STOCK, and OUT OF STOCK exact servings (including missing recipe)',
+      (tester) async {
+        final productsProvider = ProductsProvider();
+        final inventoryProvider = InventoryProvider();
+        final cartProvider = PosCartProvider();
+
+        final espresso = ProductModel(
+          productId: 'prod_esp_b',
+          name: 'Espresso B',
+          category: ProductCategory.coffee,
+          description: '',
+          imageUrl: '',
+          isAvailable: true,
+          availableBranches: const ['all'],
+          pricing: const ProductPricing(hotPrice: 80),
+          recipeId: 'rec_esp_b',
+        );
+
+        final missingRecipeProd = ProductModel(
+          productId: 'prod_missing_b',
+          name: 'Unconfigured Drink',
+          category: ProductCategory.coffee,
+          description: '',
+          imageUrl: '',
+          isAvailable: true,
+          availableBranches: const ['all'],
+          pricing: const ProductPricing(flatPrice: 90),
+        );
+
+        productsProvider.setRecipesForTesting({
+          'rec_esp_b': const RecipeModel(
+            recipeId: 'rec_esp_b',
+            productId: 'prod_esp_b',
+            name: 'Espresso B',
+            ingredients: [
+              RecipeIngredientRequirement(
+                ingredientId: 'beans',
+                quantity: 18,
+                unit: 'g',
+              ),
+            ],
+          ),
+        });
+        productsProvider.setProductsForTesting([espresso, missingRecipeProd]);
+
+        // 180g beans -> 10 servings (AVAILABLE — 10 servings)
+        inventoryProvider.setItemsForTesting(const [
+          InventoryItemModel(
+            id: 'br_beans',
+            ingredientId: 'beans',
+            name: 'Beans',
+            category: 'Ingredient',
+            availableQuantity: 180,
+            unit: 'g',
+            minStock: 10,
+            branchId: 'br_sc',
+          ),
+        ]);
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: productsProvider),
+              ChangeNotifierProvider.value(value: inventoryProvider),
+              ChangeNotifierProvider.value(value: cartProvider),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: Row(
+                  children: [
+                    SizedBox(
+                      width: 210,
+                      height: 300,
+                      child: ProductCard(
+                        product: espresso,
+                        onTap: () {},
+                        onAdd: () {},
+                      ),
+                    ),
+                    SizedBox(
+                      width: 210,
+                      height: 300,
+                      child: ProductCard(
+                        product: missingRecipeProd,
+                        onTap: () {},
+                        onAdd: () {},
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+        expect(find.text('AVAILABLE — 10 servings'), findsOneWidget);
+        expect(find.text('OUT OF STOCK — 0 servings'), findsOneWidget);
+
+        // Drop inventory to 72g beans -> 4 servings (LOW STOCK — 4 servings)
+        inventoryProvider.setItemsForTesting(const [
+          InventoryItemModel(
+            id: 'br_beans',
+            ingredientId: 'beans',
+            name: 'Beans',
+            category: 'Ingredient',
+            availableQuantity: 72,
+            unit: 'g',
+            minStock: 10,
+            branchId: 'br_sc',
+          ),
+        ]);
+        await tester.pump();
+        expect(find.text('LOW STOCK — 4 servings'), findsOneWidget);
+
+        // Drop inventory to 0g beans -> OUT OF STOCK — 0 servings for both cards
+        inventoryProvider.setItemsForTesting(const [
+          InventoryItemModel(
+            id: 'br_beans',
+            ingredientId: 'beans',
+            name: 'Beans',
+            category: 'Ingredient',
+            availableQuantity: 0,
+            unit: 'g',
+            minStock: 10,
+            branchId: 'br_sc',
+          ),
+        ]);
+        await tester.pump();
+        expect(find.text('OUT OF STOCK — 0 servings'), findsNWidgets(2));
+      },
+    );
+
+    testWidgets(
+      'Hot/Iced variant availability updates live in ProductDetailsDialog',
+      (tester) async {
+        final productsProvider = ProductsProvider();
+        final inventoryProvider = InventoryProvider();
+        final cartProvider = PosCartProvider();
+
+        final americano = ProductModel(
+          productId: 'prod_am_hot_iced',
+          name: 'Americano Variant',
+          category: ProductCategory.coffee,
+          categoryName: 'Coffee',
+          description: '',
+          imageUrl: '',
+          isAvailable: true,
+          availableBranches: const ['all'],
+          pricing: const ProductPricing(hotPrice: 90, icedPrice: 105),
+          recipeId: 'rec_am_hot_iced',
+        );
+
+        productsProvider.setRecipesForTesting({
+          'rec_am_hot_iced': const RecipeModel(
+            recipeId: 'rec_am_hot_iced',
+            productId: 'prod_am_hot_iced',
+            name: 'Americano Variant',
+            ingredients: [
+              RecipeIngredientRequirement(
+                ingredientId: 'beans',
+                quantity: 18,
+                unit: 'g',
+                temperature: 'both',
+              ),
+              RecipeIngredientRequirement(
+                ingredientId: 'cup_hot',
+                quantity: 1,
+                unit: 'pcs',
+                temperature: 'hot',
+                itemType: 'packaging',
+              ),
+              RecipeIngredientRequirement(
+                ingredientId: 'cup_iced',
+                quantity: 1,
+                unit: 'pcs',
+                temperature: 'iced',
+                itemType: 'packaging',
+              ),
+            ],
+          ),
+        });
+        productsProvider.setProductsForTesting([americano]);
+
+        // Enough beans for 20 drinks, 8 Iced cups, 3 Hot cups
+        inventoryProvider.setItemsForTesting(const [
+          InventoryItemModel(
+            id: 'br_beans',
+            ingredientId: 'beans',
+            name: 'Beans',
+            category: 'Ingredient',
+            availableQuantity: 360,
+            unit: 'g',
+            minStock: 10,
+            branchId: 'br_sc',
+          ),
+          InventoryItemModel(
+            id: 'br_cup_iced',
+            ingredientId: 'cup_iced',
+            name: 'Iced Cup',
+            category: 'Packaging',
+            availableQuantity: 8,
+            unit: 'pcs',
+            minStock: 5,
+            branchId: 'br_sc',
+          ),
+          InventoryItemModel(
+            id: 'br_cup_hot',
+            ingredientId: 'cup_hot',
+            name: 'Hot Cup',
+            category: 'Packaging',
+            availableQuantity: 3,
+            unit: 'pcs',
+            minStock: 5,
+            branchId: 'br_sc',
+          ),
+        ]);
+
+        // ProductCard defaults to Iced variant (8 servings)
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: productsProvider),
+              ChangeNotifierProvider.value(value: inventoryProvider),
+              ChangeNotifierProvider.value(value: cartProvider),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: SizedBox(
+                  width: 210,
+                  height: 300,
+                  child: ProductCard(
+                    product: americano,
+                    onTap: () {},
+                    onAdd: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        expect(find.text('AVAILABLE — 8 servings'), findsOneWidget);
+
+        // Open ProductDetailsDialog -> defaults to Iced (8 servings)
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: productsProvider),
+              ChangeNotifierProvider.value(value: inventoryProvider),
+              ChangeNotifierProvider.value(value: cartProvider),
+            ],
+            child: MaterialApp(
+              home: Scaffold(body: ProductDetailsDialog(product: americano)),
+            ),
+          ),
+        );
+        expect(find.text('AVAILABLE — 8 servings'), findsOneWidget);
+
+        // Switch to Hot -> shows Hot variant exact stock (LOW STOCK — 3 servings)
+        await tester.tap(find.text('Hot (₱90)'));
+        await tester.pump();
+        expect(find.text('LOW STOCK — 3 servings'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'CartScreen and ProductCard update remaining available servings live as shared-ingredient cart quantities change',
+      (tester) async {
+        final productsProvider = ProductsProvider();
+        final inventoryProvider = InventoryProvider();
+        final cartProvider = PosCartProvider();
+
+        final espresso = ProductModel(
+          productId: 'prod_esp_live',
+          name: 'Espresso Live',
+          category: ProductCategory.coffee,
+          description: '',
+          imageUrl: '',
+          isAvailable: true,
+          availableBranches: const ['all'],
+          pricing: const ProductPricing(hotPrice: 80),
+          recipeId: 'rec_esp_live',
+        );
+        final americano = ProductModel(
+          productId: 'prod_am_live',
+          name: 'Americano Live',
+          category: ProductCategory.coffee,
+          description: '',
+          imageUrl: '',
+          isAvailable: true,
+          availableBranches: const ['all'],
+          pricing: const ProductPricing(hotPrice: 100),
+          recipeId: 'rec_am_live',
+        );
+
+        productsProvider.setRecipesForTesting({
+          'rec_esp_live': const RecipeModel(
+            recipeId: 'rec_esp_live',
+            productId: 'prod_esp_live',
+            name: 'Espresso Live',
+            ingredients: [
+              RecipeIngredientRequirement(
+                ingredientId: 'beans',
+                quantity: 18,
+                unit: 'g',
+              ),
+            ],
+          ),
+          'rec_am_live': const RecipeModel(
+            recipeId: 'rec_am_live',
+            productId: 'prod_am_live',
+            name: 'Americano Live',
+            ingredients: [
+              RecipeIngredientRequirement(
+                ingredientId: 'beans',
+                quantity: 18,
+                unit: 'g',
+              ),
+            ],
+          ),
+        });
+        productsProvider.setProductsForTesting([espresso, americano]);
+
+        // 180g beans -> 10 shared servings total
+        inventoryProvider.setItemsForTesting(const [
+          InventoryItemModel(
+            id: 'br_beans',
+            ingredientId: 'beans',
+            name: 'Coffee Beans',
+            category: 'Ingredient',
+            availableQuantity: 180,
+            unit: 'g',
+            minStock: 10,
+            branchId: 'br_sc',
+          ),
+        ]);
+
+        // Add 2 Espresso + 1 Americano (uses 3 of 10 shared shots -> 7 remaining)
+        cartProvider.addToCart(
+          product: espresso,
+          selectedTemperature: 'Hot',
+          unitPrice: 80,
+          quantity: 2,
+        );
+        cartProvider.addToCart(
+          product: americano,
+          selectedTemperature: 'Hot',
+          unitPrice: 100,
+          quantity: 1,
+        );
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: productsProvider),
+              ChangeNotifierProvider.value(value: inventoryProvider),
+              ChangeNotifierProvider.value(value: cartProvider),
+            ],
+            child: const MaterialApp(home: CartScreen()),
+          ),
+        );
+
+        // Both cart items share the remaining 7 shots
+        expect(find.text('AVAILABLE — 7 servings'), findsNWidgets(2));
+
+        // Increase Espresso qty twice (+ -> 3, then + -> 4 -> 5 total in cart, 5 remaining)
+        await tester.tap(find.byIcon(Icons.add_circle_outline).first);
+        await tester.pump();
+        expect(find.text('AVAILABLE — 6 servings'), findsNWidgets(2));
+
+        await tester.tap(find.byIcon(Icons.add_circle_outline).first);
+        await tester.pump();
+        expect(find.text('LOW STOCK — 5 servings'), findsNWidgets(2));
+
+        // Decrease Espresso qty (- -> 3 -> 6 remaining)
+        await tester.tap(find.byIcon(Icons.remove_circle_outline).first);
+        await tester.pump();
+        expect(find.text('AVAILABLE — 6 servings'), findsNWidgets(2));
+
+        // Remove Espresso (qty 3 -> freed back to inventory, leaving 1 Americano -> 9 remaining)
+        await tester.tap(find.byIcon(Icons.delete_outline_rounded).first);
+        await tester.pump();
+        expect(find.text('AVAILABLE — 9 servings'), findsOneWidget);
       },
     );
   });

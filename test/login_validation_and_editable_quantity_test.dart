@@ -108,6 +108,9 @@ void main() {
         ),
       );
 
+      // Character counters are hidden while 50-character limit remains enforced
+      expect(find.text('0/50'), findsNothing);
+
       // Tap Sign In with empty fields
       await tester.tap(find.text('Sign In Branch Device'));
       await tester.pumpAndSettle();
@@ -115,19 +118,25 @@ void main() {
       expect(find.text('Enter branch account email'), findsOneWidget);
       expect(find.text('Enter password'), findsOneWidget);
 
-      // Enter invalid email without @
+      // Enter invalid email without @ — live validation shows error immediately
       await tester.enterText(find.byType(TextFormField).first, 'santacruz_device');
-      await tester.tap(find.text('Sign In Branch Device'));
       await tester.pumpAndSettle();
 
       expect(find.text('Enter a valid email address containing "@".'), findsOneWidget);
 
-      // Enter invalid email without domain
-      await tester.enterText(find.byType(TextFormField).first, 'device@');
-      await tester.tap(find.text('Sign In Branch Device'));
+      // Typing "@" immediately clears the "@" validation error live
+      await tester.enterText(find.byType(TextFormField).first, 'santacruz_device@');
       await tester.pumpAndSettle();
 
-      expect(find.text('Enter a valid email address containing "@".'), findsOneWidget);
+      expect(find.text('Enter a valid email address containing "@".'), findsNothing);
+
+      // Verify 50-character limit still caps long input and counter stays hidden
+      final longEmail = '${'a' * 55}@b.com';
+      await tester.enterText(find.byType(TextFormField).first, longEmail);
+      await tester.pumpAndSettle();
+      final emailFieldWidget = tester.widget<TextFormField>(find.byType(TextFormField).first);
+      expect(emailFieldWidget.controller?.text.length, 50);
+      expect(find.text('50/50'), findsNothing);
     });
 
     testWidgets('Preserves login inputs and prevents duplicate requests after unsuccessful authentication', (tester) async {
@@ -440,7 +449,7 @@ void main() {
       expect(find.textContaining('Firebase Backend'), findsNothing);
     });
 
-    testWidgets('Email and Password input fields strictly enforce 20-character maximum and hide character counters', (tester) async {
+    testWidgets('Email and Password input fields enforce 50-character limit while accepting migrated Gmail addresses', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: ChangeNotifierProvider<BranchSessionProvider>(
@@ -453,26 +462,36 @@ void main() {
       final emailFinder = find.byType(TextFormField).at(0);
       final passwordFinder = find.byType(TextFormField).at(1);
 
-      // Enter 30-character email
-      await tester.enterText(emailFinder, 'verylongemailaddress123@example.com');
+      // Verify Santa Cruz Gmail (26 chars) is accepted in full
+      await tester.enterText(emailFinder, 'sukunaryoumen154@gmail.com');
       await tester.pump();
+      var emailField = tester.widget<TextFormField>(emailFinder);
+      expect(emailField.controller?.text, 'sukunaryoumen154@gmail.com');
+      expect(emailField.controller?.text.length, 26);
 
-      // Enter 30-character password
+      // Verify LSPU Gmail (28 chars) is accepted in full within 50-character limit
+      await tester.enterText(emailFinder, 'malabananshanken03@gmail.com');
+      await tester.pump();
+      emailField = tester.widget<TextFormField>(emailFinder);
+      expect(emailField.controller?.text, 'malabananshanken03@gmail.com');
+      expect(emailField.controller?.text.length, 28);
+
+      // Verify 31-character password is accepted in full within 50-character limit
       await tester.enterText(passwordFinder, 'VeryLongPassword1234567890Extra');
       await tester.pump();
+      var passwordField = tester.widget<TextFormField>(passwordFinder);
+      expect(passwordField.controller?.text, 'VeryLongPassword1234567890Extra');
+      expect(passwordField.controller?.text.length, 31);
 
-      final emailField = tester.widget<TextFormField>(emailFinder);
-      final passwordField = tester.widget<TextFormField>(passwordFinder);
-
-      // Max 20 characters enforced
-      expect(emailField.controller?.text.length, 20);
-      expect(emailField.controller?.text, 'verylongemailaddress');
-      expect(passwordField.controller?.text.length, 20);
-      expect(passwordField.controller?.text, 'VeryLongPassword1234');
-
-      // No distracting counter widgets ("20/20") rendered
-      expect(find.text('20/20'), findsNothing);
-      expect(find.text('0/20'), findsNothing);
+      // Verify inputs longer than 50 chars are capped at 50 characters
+      final oversizedInput = 'a' * 60;
+      await tester.enterText(emailFinder, oversizedInput);
+      await tester.enterText(passwordFinder, oversizedInput);
+      await tester.pump();
+      emailField = tester.widget<TextFormField>(emailFinder);
+      passwordField = tester.widget<TextFormField>(passwordFinder);
+      expect(emailField.controller?.text.length, 50);
+      expect(passwordField.controller?.text.length, 50);
     });
 
     testWidgets('Email and Password fields reject whitespace-only inputs', (tester) async {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -79,81 +80,89 @@ class _CreateRestockDialogState extends State<CreateRestockDialog> {
 
     return Dialog(
       backgroundColor: AppColors.surfaceWhite,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: AppColors.latteBeige, width: 1),
+        side: const BorderSide(color: AppColors.borderSubtle, width: 1),
       ),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Request Restocking',
-                      style: AppTextStyles.dialogTitle(),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: AppColors.textSecondary,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(22.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Request Restocking',
+                        style: AppTextStyles.dialogTitle(),
                       ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                Text(
-                  'Branch: ${session.currentBranchName} (${session.branchId})',
-                  style: AppTextStyles.caption(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 16),
-
-                // Category selection
-                Text('Item Category', style: AppTextStyles.formLabel()),
-                const SizedBox(height: 6),
-                Row(
-                  children: _categories.map((cat) {
-                    final isSelected = _selectedCategory == cat;
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                        child: ChoiceChip(
-                          label: Text(
-                            cat,
-                            style: AppTextStyles.navLabel(
-                              fontSize: 12,
-                              color: isSelected
-                                  ? AppColors.surfaceWhite
-                                  : AppColors.textSecondary,
-                            ),
-                          ),
-                          selected: isSelected,
-                          selectedColor: AppColors.darkCoffee,
-                          backgroundColor: AppColors.surfaceWhite,
-                          side: BorderSide(
-                            color: isSelected
-                                ? AppColors.darkCoffee
-                                : AppColors.latteBeige,
-                          ),
-                          onSelected: (selected) {
-                            if (selected) {
-                              setState(() {
-                                _selectedCategory = cat;
-                                _selectedIngredientId = null;
-                              });
-                            }
-                          },
+                      IconButton(
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: AppColors.textSecondary,
                         ),
+                        onPressed: () => Navigator.pop(context),
                       ),
-                    );
-                  }).toList(),
-                ),
+                    ],
+                  ),
+                  Text(
+                    'Branch: ${session.currentBranchName} (${session.branchId})',
+                    style: AppTextStyles.caption(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Category selection
+                  Text('Item Category', style: AppTextStyles.formLabel()),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: _categories.map((cat) {
+                      final isSelected = _selectedCategory == cat;
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                          child: ChoiceChip(
+                            label: Text(
+                              cat,
+                              style: AppTextStyles.navLabel(
+                                fontSize: 12,
+                                color: isSelected
+                                    ? AppColors.surfaceWhite
+                                    : AppColors.darkCoffee,
+                              ),
+                            ),
+                            selected: isSelected,
+                            selectedColor: AppColors.darkCoffee,
+                            backgroundColor: AppColors.warmCream,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            side: BorderSide(
+                              color: isSelected
+                                  ? AppColors.darkCoffee
+                                  : AppColors.borderSubtle,
+                            ),
+                            showCheckmark: false,
+                            onSelected: (selected) {
+                              if (selected) {
+                                setState(() {
+                                  _selectedCategory = cat;
+                                  _selectedIngredientId = null;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
 
                 const SizedBox(height: 16),
 
@@ -365,11 +374,20 @@ class _CreateRestockDialogState extends State<CreateRestockDialog> {
                 TextFormField(
                   controller: _noteController,
                   maxLines: 2,
+                  maxLength: 100,
+                  inputFormatters: [LengthLimitingTextInputFormatter(100)],
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   style: AppTextStyles.inputField(),
                   decoration: InputDecoration(
                     hintText: 'e.g. Low stock for upcoming weekend rush...',
                     hintStyle: AppTextStyles.inputHint(),
                   ),
+                  validator: (val) {
+                    if (val != null && val.length > 100) {
+                      return 'Note cannot exceed 100 characters';
+                    }
+                    return null;
+                  },
                 ),
 
                 const SizedBox(height: 20),
@@ -476,6 +494,7 @@ class _CreateRestockDialogState extends State<CreateRestockDialog> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
