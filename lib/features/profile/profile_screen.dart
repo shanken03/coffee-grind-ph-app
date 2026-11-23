@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../providers/branch_session_provider.dart';
 import '../../providers/notification_provider.dart';
+import 'privacy_policy_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -537,20 +538,10 @@ class ProfileScreen extends StatelessWidget {
                           ),
                           trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
                           onTap: () {
-                            _showInfoModal(
-                              context,
-                              title: 'Privacy Policy',
-                              icon: Icons.privacy_tip_outlined,
-                              children: [
-                                Text(
-                                  'Data Protection & Security Statement',
-                                  style: AppTextStyles.cardTitle(fontSize: 14, color: AppColors.darkCoffee),
-                                ),
-                                const SizedBox(height: 10),
-                                _buildPolicyParagraph('1. Transaction Data: Transaction records (item quantities, timestamps, totals, and payment methods) are securely saved to Firebase Realtime Database for branch accounting.'),
-                                _buildPolicyParagraph('2. Customer Privacy: Coffee Grind PH Staff App does NOT collect, store, or transmit customer bank credentials or sensitive payment details. GCash transactions only record cashier-verified reference numbers.'),
-                                _buildPolicyParagraph('3. Device Isolation: Security rules enforce strict branch boundary checks ensuring this terminal can only access its own branch payment settings and stock quotas.'),
-                              ],
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const PrivacyPolicyScreen(),
+                              ),
                             );
                           },
                         ),

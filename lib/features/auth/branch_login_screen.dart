@@ -7,6 +7,7 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/auth_error_formatter.dart';
 import '../../core/widgets/app_animations.dart';
 import '../../providers/branch_session_provider.dart';
+import '../profile/privacy_policy_screen.dart';
 
 class BranchLoginScreen extends StatefulWidget {
   const BranchLoginScreen({super.key});
@@ -372,6 +373,27 @@ class _BranchLoginScreenState extends State<BranchLoginScreen> {
                         fontSize: 12,
                         color: AppColors.textMuted,
                         letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const PrivacyPolicyScreen(),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        'Privacy Policy',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.caption(
+                          fontSize: 12,
+                          color: AppColors.warmBronze,
+                        ).copyWith(
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppColors.warmBronze,
+                        ),
                       ),
                     ),
                   ],

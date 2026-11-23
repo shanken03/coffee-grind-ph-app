@@ -98,20 +98,85 @@ Upload the following generated assets to 'Store presence' -> 'Main store listing
 
 3. Phone Screenshots:
    - Provide 2 to 8 screenshots of the running app (16:9 or 18:9 aspect ratio).
-   - Recommended screens: POS Menu, Cart Checkout, Restock Requests, Announcements.
+   - Recommended screens:
+     a. Menu / POS Screen showing beverage cards and categories.
+     b. Cart & Checkout screen showing cash / GCash options.
+     c. Restocking & Inventory status screen.
+     d. Announcements & Notifications screen.
+     e. In-App Privacy Policy Screen (Profile -> Privacy Policy).
+     f. Branch login / selection screen.
 
 --------------------------------------------------------------------------------
-5. APP CONTENT & DECLARATIONS
+5. APP CONTENT: EXACT DATA SAFETY QUESTIONNAIRE ANSWERS
 --------------------------------------------------------------------------------
-Complete each questionnaire under 'App content' in Google Play Console:
+In Google Play Console -> 'Policy and programs' -> 'App content' -> 'Data safety':
 
+[Overview Page]:
+1. Does your app collect or share any of the required user data types?
+   -> Select: YES
+2. Is all of the user data collected by your app encrypted in transit?
+   -> Select: YES (All traffic is encrypted over TLS/HTTPS via Firebase SDK)
+3. Do you provide a way for users to request that their data be deleted?
+   -> Select: YES (Users can email malabananshanken03@gmail.com)
+
+[Data Types Selection Page]:
+Check ONLY the following boxes:
+- [x] Personal info:
+      - [x] Name
+      - [x] Email address
+      - [x] User IDs
+- [x] Financial info:
+      - [x] Purchase history
+(Leave Location, Health, Messages, Photos, Audio, Files, Calendar, Contacts,
+ Device IDs, and other categories UNCHECKED).
+
+[Data Usage Details Page]:
+
+For "Name":
+- Collected or shared: Collected
+- Processed ephemerally: No
+- Data collection is required or optional: Required
+- Why is this user data collected:
+  [x] App functionality
+  [x] Account management
+
+For "Email address":
+- Collected or shared: Collected
+- Processed ephemerally: No
+- Data collection is required or optional: Required
+- Why is this user data collected:
+  [x] App functionality
+  [x] Account management
+
+For "User IDs":
+- Collected or shared: Collected
+- Processed ephemerally: No
+- Data collection is required or optional: Required
+- Why is this user data collected:
+  [x] App functionality
+  [x] Account management
+  [x] Fraud prevention, security, and compliance
+
+For "Purchase history":
+- Collected or shared: Collected
+- Processed ephemerally: No
+- Data collection is required or optional: Required
+- Why is this user data collected:
+  [x] App functionality
+  [x] Account management
+  (Explanation: Stores in-cafe sales receipts, items purchased, totals, and
+   cashier-verified reference numbers for store bookkeeping).
+
+--------------------------------------------------------------------------------
+6. OTHER APP CONTENT QUESTIONNAIRES
+--------------------------------------------------------------------------------
 1. Privacy Policy:
    - URL: https://coffee-grind-ph-dce9c.web.app/privacy-policy.html
-   (Hosted and live on your official Firebase domain).
+   (Also accessible in-app via Login Screen footer and Profile -> Privacy Policy).
 
 2. App Access:
    - Select: "All or some functionality in my app is restricted" (requires branch login).
-   - Provide test login credentials for Google app reviewers:
+   - Test login credentials for Google app reviewers:
      * Instructions: "Staff POS terminal application. Select a branch and log in using branch credentials to access the POS."
      * Branch: LSPU Branch or Santa Cruz Branch
      * Email / Username: (provide branch test user from Firebase Authentication)
@@ -122,19 +187,14 @@ Complete each questionnaire under 'App content' in Google Play Console:
 
 4. Content Rating:
    - Category: Utility / Productivity / Commercial.
-   - Rating outcome: Everyone / All ages.
+   - Outcome: Everyone / All ages.
 
 5. Target Audience & Content:
    - Target age groups: 18 and over (Internal enterprise/staff POS).
    - Could your app unintentionally appeal to children: No.
 
-6. Data Safety:
-   - Data collected: User account IDs (authentication), Purchase history/sales receipts.
-   - Data encrypted in transit: Yes (HTTPS / TLS via Firebase SDK).
-   - Can users request data deletion: Yes (contact store management).
-
 --------------------------------------------------------------------------------
-6. APP RELEASES & BUNDLE UPLOAD
+7. APP RELEASES & BUNDLE UPLOAD
 --------------------------------------------------------------------------------
 Step 1: Go to 'Release' -> 'Testing' -> 'Internal testing' (recommended for first test).
 Step 2: Click [Create new release].
@@ -145,24 +205,20 @@ Step 4: Upload the App Bundle:
 Step 5: Release name: 1.0.0 (1)
 Step 6: Release notes:
         "Initial release of Coffee Grind PH Mobile Staff POS with offline sync,
-         inventory recipe deduction, and daily serving quota controls."
+         inventory recipe deduction, daily serving quota controls, and in-app
+         privacy policy."
 Step 7: Click [Save] and [Review release], then roll out to internal testers.
 
 --------------------------------------------------------------------------------
-7. FIREBASE AUTH & FIRESTORE ALIGNMENT CHECKLIST
+8. FIREBASE SHA CERTIFICATE FINGERPRINT ENROLLMENT
 --------------------------------------------------------------------------------
-Before distributing to branch staff:
-1. Verify SHA-1 & SHA-256 in Firebase Console:
-   - In Google Play Console -> Setup -> App integrity -> App signing.
-   - Copy the 'SHA-1 certificate fingerprint' and 'SHA-256 certificate fingerprint'
-     from the 'App signing key certificate'.
-   - Go to Firebase Console (https://console.firebase.google.com/) ->
-     Project Settings -> Your apps -> Android app (com.shanken.coffeegrindph) ->
-     Add fingerprint.
-   - Paste both SHA-1 and SHA-256. This ensures Firebase Authentication and
-     Google Play App Signing work without rejection.
-
-2. Verify Firestore Security Rules:
-   - Ensure the unified ruleset with Section 10 quota and RFID rules remains
-     active in coffee-grind-ph-dce9c.
+When you create a release with Google Play App Signing:
+1. In Google Play Console -> Setup -> App integrity -> App signing.
+2. Copy the 'SHA-1 certificate fingerprint' and 'SHA-256 certificate fingerprint'
+   from the 'App signing key certificate'.
+3. Go to Firebase Console (https://console.firebase.google.com/) ->
+   Project Settings -> Your apps -> Android app (com.shanken.coffeegrindph) ->
+   Click [Add fingerprint].
+4. Paste both SHA-1 and SHA-256. This ensures Firebase Authentication and
+   Google Play App Signing work without rejection.
 ================================================================================
