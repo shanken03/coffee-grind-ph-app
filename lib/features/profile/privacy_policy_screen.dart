@@ -68,7 +68,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Package: com.shanken.coffeegrindph • Version 1.0.0',
+                    'Package: ph.coffeegrind.officialpos • Version 1.0.0',
                     style: AppTextStyles.subtitle(
                       color: AppColors.latteBeige.withValues(alpha: 0.8),
                       fontSize: 12,

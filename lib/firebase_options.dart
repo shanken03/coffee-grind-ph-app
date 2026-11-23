@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyABKKIVFrOGkdefFq3jXLJHo72duj6A32I',
-    appId: '1:925115875254:android:086a93da3db0ff19570b17',
+    appId: '1:925115875254:android:c24aa2b92d21d871570b17',
     messagingSenderId: '925115875254',
     projectId: 'coffee-grind-ph-dce9c',
     databaseURL: 'https://coffee-grind-ph-dce9c-default-rtdb.asia-southeast1.firebasedatabase.app',

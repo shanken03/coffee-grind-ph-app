@@ -3,16 +3,16 @@
 ================================================================================
 Project: Coffee Grind PH (Mobile Staff POS)
 Firebase Backend: coffee-grind-ph-dce9c (Firebase Spark Plan)
-Package Name: com.shanken.coffeegrindph
+Package Name: ph.coffeegrind.officialpos
 Generated Date: November 2026
 
 --------------------------------------------------------------------------------
 1. PROJECT SPECIFICATIONS & METADATA
 --------------------------------------------------------------------------------
 - App Name: Coffee Grind PH - Mobile POS
-- Application ID / Package Name: com.shanken.coffeegrindph
+- Application ID / Package Name: ph.coffeegrind.officialpos
   (Registered in Google Firebase Project coffee-grind-ph-dce9c)
-- Firebase Android App ID: 1:925115875254:android:086a93da3db0ff19570b17
+- Firebase Android App ID: 1:925115875254:android:c24aa2b92d21d871570b17
 - Live Admin Web URL: https://coffee-grind-ph-dce9c.web.app
 - Live Staff POS Web URL: https://coffeegrindph.web.app
 - Live Privacy Policy URL: https://coffeegrindph.web.app/privacy-policy.html
@@ -230,7 +230,7 @@ Certificate Fingerprints:
   4D:69:03:2E:70:39:CC:B6:89:22:36:EC:29:D3:56:D1:21:E1:1B:DC:B0:9D:F6:31:BF:6A:17:1A:07:79:B9:02
 
 Add both the above SHA-1 and SHA-256 fingerprints to your Firebase Console:
-Firebase Console -> Project Settings -> Your apps -> com.shanken.coffeegrindph ->
+Firebase Console -> Project Settings -> Your apps -> ph.coffeegrind.officialpos ->
 Click [Add fingerprint] and paste both.
 
 --------------------------------------------------------------------------------
@@ -241,7 +241,7 @@ When you create a release with Google Play App Signing:
 2. Copy the 'SHA-1 certificate fingerprint' and 'SHA-256 certificate fingerprint'
    from the 'App signing key certificate'.
 3. Go to Firebase Console (https://console.firebase.google.com/) ->
-   Project Settings -> Your apps -> Android app (com.shanken.coffeegrindph) ->
+   Project Settings -> Your apps -> Android app (ph.coffeegrind.officialpos) ->
    Click [Add fingerprint].
 4. Paste both SHA-1 and SHA-256. This ensures Firebase Authentication and
    Google Play App Signing work without rejection.

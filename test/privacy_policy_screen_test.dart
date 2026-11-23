@@ -17,7 +17,7 @@ void main() {
 
       expect(find.text('Privacy Policy'), findsAtLeast(1));
       expect(find.text('Coffee Grind PH — Privacy Policy'), findsOneWidget);
-      expect(find.textContaining('com.shanken.coffeegrindph'), findsOneWidget);
+      expect(find.textContaining('ph.coffeegrind.officialpos'), findsOneWidget);
       expect(find.text('1. Purpose of the Application'), findsOneWidget);
       expect(find.text('2. Data We Collect'), findsOneWidget);
       expect(find.text('3. How Data is Used'), findsOneWidget);
