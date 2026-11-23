@@ -3,7 +3,7 @@
     "rules": "firestore.rules"
   },
   "hosting": {
-    "site": "coffee-grind-ph-dce9c",
+    "site": "coffeegrindph",
     "public": "build/web",
     "ignore": [
       "firebase.json",

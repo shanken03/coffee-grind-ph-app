@@ -24,7 +24,7 @@ void main() {
       expect(find.text('4. Data Security & Encryption'), findsOneWidget);
       expect(find.text('5. Permissions & Device Access'), findsOneWidget);
       expect(find.text('6. Data Deletion & Contact Inquiries'), findsOneWidget);
-      expect(find.textContaining('https://coffee-grind-ph-dce9c.web.app/privacy-policy.html'), findsOneWidget);
+      expect(find.textContaining('https://coffeegrindph.web.app/privacy-policy.html'), findsOneWidget);
     });
 
     testWidgets('2. BranchLoginScreen shows Privacy Policy link and navigates on tap', (tester) async {

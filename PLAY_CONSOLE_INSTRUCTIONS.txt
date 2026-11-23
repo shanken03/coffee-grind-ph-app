@@ -13,8 +13,9 @@ Generated Date: November 2026
 - Application ID / Package Name: com.shanken.coffeegrindph
   (Registered in Google Firebase Project coffee-grind-ph-dce9c)
 - Firebase Android App ID: 1:925115875254:android:086a93da3db0ff19570b17
-- Live Hosted Web URL: https://coffee-grind-ph-dce9c.web.app
-- Live Privacy Policy URL: https://coffee-grind-ph-dce9c.web.app/privacy-policy.html
+- Live Admin Web URL: https://coffee-grind-ph-dce9c.web.app
+- Live Staff POS Web URL: https://coffeegrindph.web.app
+- Live Privacy Policy URL: https://coffeegrindph.web.app/privacy-policy.html
 - Current Version: 1.0.0 (Version Code: 1)
 - Target Platforms: Android (minSdk: 21+, targetSdk: 34+)
 - Bundle Output Location:
@@ -171,7 +172,7 @@ For "Purchase history":
 6. OTHER APP CONTENT QUESTIONNAIRES
 --------------------------------------------------------------------------------
 1. Privacy Policy:
-   - URL: https://coffee-grind-ph-dce9c.web.app/privacy-policy.html
+   - URL: https://coffeegrindph.web.app/privacy-policy.html
    (Also accessible in-app via Login Screen footer and Profile -> Privacy Policy).
 
 2. App Access:

@@ -140,7 +140,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   'Commercial transaction records are archived for internal store accounting, inventory audits, and tax compliance.\n\n'
                   'For privacy inquiries or account data deletion requests, contact store administration at:\n'
                   'Email: malabananshanken03@gmail.com\n'
-                  'Website: https://coffee-grind-ph-dce9c.web.app',
+                  'Website: https://coffeegrindph.web.app',
             ),
 
             const SizedBox(height: 16),
@@ -179,7 +179,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'https://coffee-grind-ph-dce9c.web.app/privacy-policy.html',
+                          'https://coffeegrindph.web.app/privacy-policy.html',
                           style: AppTextStyles.subtitle(
                             color: AppColors.textPrimary,
                             fontSize: 11,
