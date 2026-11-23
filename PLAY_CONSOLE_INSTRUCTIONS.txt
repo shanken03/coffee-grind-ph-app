@@ -211,7 +211,30 @@ Step 6: Release notes:
 Step 7: Click [Save] and [Review release], then roll out to internal testers.
 
 --------------------------------------------------------------------------------
-8. FIREBASE SHA CERTIFICATE FINGERPRINT ENROLLMENT
+8. RELEASE SIGNING CONFIGURATION & CERTIFICATE FINGERPRINTS
+--------------------------------------------------------------------------------
+The Android App Bundle is signed in RELEASE mode using the dedicated upload
+keystore:
+
+Keystore Location: android/app/upload-keystore.jks
+Keystore Properties: android/key.properties
+Key Alias: upload
+Keystore Password: coffeegrindph2026
+Key Password: coffeegrindph2026
+Validity: 10,000 days (Until April 2054)
+
+Certificate Fingerprints:
+- SHA-1:
+  A0:11:49:76:DC:88:F9:99:91:D9:D8:62:8E:F0:3B:9F:4D:3F:0C:34
+- SHA-256:
+  4D:69:03:2E:70:39:CC:B6:89:22:36:EC:29:D3:56:D1:21:E1:1B:DC:B0:9D:F6:31:BF:6A:17:1A:07:79:B9:02
+
+Add both the above SHA-1 and SHA-256 fingerprints to your Firebase Console:
+Firebase Console -> Project Settings -> Your apps -> com.shanken.coffeegrindph ->
+Click [Add fingerprint] and paste both.
+
+--------------------------------------------------------------------------------
+9. FIREBASE SHA CERTIFICATE FINGERPRINT ENROLLMENT (GOOGLE PLAY APP SIGNING)
 --------------------------------------------------------------------------------
 When you create a release with Google Play App Signing:
 1. In Google Play Console -> Setup -> App integrity -> App signing.
