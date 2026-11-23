@@ -1,4 +1,4 @@
-package com.example.coffee_grind_ph
+package ph.coffeegrind.officialpos
 
 import io.flutter.embedding.android.FlutterActivity
 

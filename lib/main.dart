@@ -20,12 +20,16 @@ import 'features/main_navigation_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('FLUTTER_ERROR: ${details.exceptionAsString()}');
+  };
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-  } catch (_) {
-    // Firebase initialization fallback if already initialized or in test environment
+  } catch (e) {
+    debugPrint('FIREBASE_INIT_FALLBACK: $e');
   }
   runApp(const MyApp());
 }
