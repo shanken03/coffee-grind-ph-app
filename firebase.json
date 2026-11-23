@@ -2,12 +2,27 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "hosting": {
+    "site": "coffee-grind-ph-dce9c",
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
   "flutter": {
     "platforms": {
       "android": {
         "default": {
           "projectId": "coffee-grind-ph-dce9c",
-          "appId": "1:925115875254:android:1013f2ab4631bb5e570b17",
+          "appId": "1:925115875254:android:086a93da3db0ff19570b17",
           "fileOutput": "android/app/google-services.json"
         }
       },
@@ -15,7 +30,7 @@
         "lib/firebase_options.dart": {
           "projectId": "coffee-grind-ph-dce9c",
           "configurations": {
-            "android": "1:925115875254:android:1013f2ab4631bb5e570b17",
+            "android": "1:925115875254:android:086a93da3db0ff19570b17",
             "ios": "1:925115875254:ios:af3a0c7c8878b799570b17",
             "macos": "1:925115875254:ios:af3a0c7c8878b799570b17",
             "web": "1:925115875254:web:b8e6ea183a538cce570b17",

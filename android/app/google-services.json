@@ -15,6 +15,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "925115875254-7j955ho4dl6j2n8f3j984fbjdvbk12fp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.coffee_grind_ph",
+            "certificate_hash": "4e97e15791b4c015d6e454b2150e2b5529d76c29"
+          }
+        },
+        {
           "client_id": "925115875254-ie1dg35f04lddjcqmmc60k0537nvbffe.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -30,6 +38,85 @@
             {
               "client_id": "925115875254-ie1dg35f04lddjcqmmc60k0537nvbffe.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "925115875254-21s38slkf4o8hlpichdpcrk61frsuetk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.coffeeGrindWeb"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:925115875254:android:bcced684dcecd8b5570b17",
+        "android_client_info": {
+          "package_name": "com.example.coffee_grind_web"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "925115875254-ie1dg35f04lddjcqmmc60k0537nvbffe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABKKIVFrOGkdefFq3jXLJHo72duj6A32I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "925115875254-ie1dg35f04lddjcqmmc60k0537nvbffe.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "925115875254-21s38slkf4o8hlpichdpcrk61frsuetk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.coffeeGrindWeb"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:925115875254:android:086a93da3db0ff19570b17",
+        "android_client_info": {
+          "package_name": "com.shanken.coffeegrindph"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "925115875254-ie1dg35f04lddjcqmmc60k0537nvbffe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABKKIVFrOGkdefFq3jXLJHo72duj6A32I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "925115875254-ie1dg35f04lddjcqmmc60k0537nvbffe.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "925115875254-21s38slkf4o8hlpichdpcrk61frsuetk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.coffeeGrindWeb"
+              }
             }
           ]
         }
