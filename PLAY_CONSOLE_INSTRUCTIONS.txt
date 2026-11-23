@@ -16,7 +16,7 @@ Generated Date: November 2026
 - Live Admin Web URL: https://coffee-grind-ph-dce9c.web.app
 - Live Staff POS Web URL: https://coffeegrindph.web.app
 - Live Privacy Policy URL: https://coffeegrindph.web.app/privacy-policy.html
-- Current Version: 1.0.0 (Version Code: 1)
+- Current Version: 1.0.1 (Version Code: 2)
 - Target Platforms: Android (minSdk: 21+, targetSdk: 34+)
 - Bundle Output Location:
   build/app/outputs/bundle/release/app-release.aab
@@ -203,7 +203,7 @@ Step 3: App signing: Select 'Use Google-generated key' (Play App Signing).
 Step 4: Upload the App Bundle:
         Drag and drop:
         build/app/outputs/bundle/release/app-release.aab
-Step 5: Release name: 1.0.0 (1)
+Step 5: Release name: 1.0.1 (2)
 Step 6: Release notes:
         "Initial release of Coffee Grind PH Mobile Staff POS with offline sync,
          inventory recipe deduction, daily serving quota controls, and in-app
